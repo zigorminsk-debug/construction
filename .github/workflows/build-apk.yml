@@ -119,11 +119,10 @@ jobs:
           ls -lh $ANDROID_HOME/platforms 2>&1 | head -20 >> $GITHUB_STEP_SUMMARY || true
           cat /tmp/gradle.log 2>&1 | tail -n 300 || true
 
-      - name: Comment gradle log on commit (for sandbox debug)
-        if: always()
+      - name: Comment gradle log on commit (only on failure)
+        if: failure()
         run: |
           LOG_TAIL=$(tail -n 120 /tmp/gradle.log 2>&1 | head -c 60000 || echo "no log file")
-          # Escape for JSON
           BODY=$(printf "Gradle log tail for run %s\n\`\`\`\n%s\n\`\`\`" "${{ github.run_id }}" "$LOG_TAIL")
           echo "$BODY" > /tmp/body.txt
           gh api repos/${{ github.repository }}/commits/${{ github.sha }}/comments -f body="$(cat /tmp/body.txt)" 2>&1 | head -20 || echo "comment failed"
