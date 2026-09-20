@@ -140,19 +140,16 @@ class MainActivity : AppCompatActivity() {
             val json = JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
             val code = json.optString("tag_name", "").substringAfterLast('.').toIntOrNull() ?: return null
             val assets = json.optJSONArray("assets") ?: return null
-            var anyApk: String? = null
-            var releaseApk: String? = null
+            var apkUrl: String? = null
             for (i in 0 until assets.length()) {
                 val a = assets.getJSONObject(i)
                 val an = a.optString("name", "")
-                if (an.endsWith(".apk")) {
-                    val dl = a.optString("browser_download_url", "")
-                    if (dl.isEmpty()) continue
-                    anyApk = anyApk ?: dl
-                    if (an.contains("release", ignoreCase = true)) releaseApk = dl
-                }
+                // release-APK называется construction-v<версия>.apk; debug пропускаем
+                if (!an.endsWith(".apk") || an.contains("debug", ignoreCase = true)) continue
+                val dl = a.optString("browser_download_url", "")
+                if (dl.isNotEmpty()) { apkUrl = apkUrl ?: dl }
             }
-            val url = releaseApk ?: anyApk ?: return null
+            val url = apkUrl ?: return null
             RemoteRelease(code, json.optString("name", "v1.0.$code"), url)
         } finally {
             conn.disconnect()

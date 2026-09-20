@@ -202,7 +202,6 @@ jobs:
             - Рекомендуемый файл: `construction-v1.0.${{ github.run_number }}.apk` (release)
             Установка: разрешите «Установку из неизвестных источников».
           files: |
-            android/app/build/outputs/apk/debug/*.apk
             android/app/build/outputs/apk/release/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
