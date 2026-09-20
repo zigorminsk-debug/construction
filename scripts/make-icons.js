@@ -4,7 +4,7 @@
  *
  * Выбор иконки:  icons/app/app-icon.json  →  { "selected": ... }
  *   - число 1..6  → векторный вариант icons/app/icon-N.svg (арт в <g id="art">)
- *   - буква A..F  → AI-растр icons/app/raster/icon-X.png (1024×1024, полный фон)
+ *   - буква A..Z  → AI-растр icons/app/raster/icon-X.png (1024×1024, полный фон)
  *
  * Запуск:  node scripts/make-icons.js
  *
@@ -58,7 +58,7 @@ if (/^\d+$/.test(sel)) {
       `<g${artAttrs}>${art}</g></g>`
     ),
   };
-} else if (/^[A-Fa-f]$/.test(sel)) {
+} else if (/^[A-Za-z]$/.test(sel)) {
   // ===== РАСТР (AI-иконка icon-X.png) =====
   const id = sel.toUpperCase();
   const file = join(ROOT, `icons/app/raster/icon-${id}.png`);
@@ -133,7 +133,7 @@ if (/^\d+$/.test(sel)) {
   };
   console.log(`  (автообрезка: bbox ${s}×${s}, скругление ~${Math.round(cornerR)}px, фон ${bgHex})`);
 } else {
-  throw new Error(`Непонятный selected: "${sel}" (ожидается число 1..6 или буква A..F)`);
+  throw new Error(`Непонятный selected: "${sel}" (ожидается число 1..6 или буква A..Z)`);
 }
 
 const render = async (img, size, out) => {
