@@ -22,7 +22,7 @@ input,select,button{font-family:inherit}
 
 #app{min-height:100vh;display:flex;flex-direction:column}
 .header{
-  height:60px;background:var(--accent2);color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 18px;position:sticky;top:0;z-index:20;border-bottom:1px solid rgba(255,255,255,.08)
+  min-height:60px;background:var(--accent2);color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 18px;position:sticky;top:0;z-index:20;border-bottom:1px solid rgba(255,255,255,.08)
 }
 .header-left{display:flex;align-items:center;gap:12px}
 .logo{width:38px;height:38px;display:grid;place-items:center;background:#fff;border-radius:10px}
@@ -180,18 +180,56 @@ input,select,button{font-family:inherit}
 
 /* Print */
 @media print{
-  .header,.panel-left,.tabs,.mobile-nav,.canvas-toolbar .toolbar-right,.parts-actions,.btn{display:none !important}
-  .layout{grid-template-columns:1fr}
-  .main-content{padding:0}
-  .canvas-wrap,.proj-card,.table-wrap,.sheet-card{box-shadow:none;break-inside:avoid}
+  @page{ size: A4 portrait; margin: 8mm }
+  html{ zoom:1 !important }
+  html,body{ background:#fff !important; margin:0 !important; padding:0 !important }
+  /* не печатать хром приложения */
+  .header,.panel-left,.tabs,.mobile-nav,.view-switch,.zoom-overlay,.pm-overlay,.toast,
+  .canvas-toolbar,.parts-actions,.asm-hint,.canvas-legend,#assemblyLegend,.sheet-legend,
+  .cutting-tips,.btn,.btn-small,.custom-mat,.summary-mini{ display:none !important }
+  #app{ display:block !important; height:auto !important; min-height:0 !important; overflow:visible !important; padding:0 !important; background:#fff !important }
+  .layout{ display:block !important; height:auto !important; min-height:0 !important }
+  /* мобильное переключение «Параметры/Результат» — в печати видим оба блока */
+  body.view-params .main, body:not(.view-params) .panel-left{ display:block !important }
+  .main,.main-content{ display:block !important; height:auto !important; min-height:0 !important; overflow:visible !important; padding:0 !important; background:#fff !important }
+  /* печатаем ВСЕ вкладки подряд, каждая с заголовком */
+  .tab-panel{ display:block !important; background:#fff !important; padding:0 0 10px }
+  .tab-panel::before{ content:attr(data-title); display:block; font-size:15px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:#000; margin:18px 0 10px; padding-bottom:6px; border-bottom:2px solid #000 }
+  .tab-panel:first-of-type::before{ margin-top:0 }
+  .canvas-wrap,.proj-card,.sheet-card,.table-wrap,.est-card,.part-sketch,.parts-sketches,.joints-totals{ background:#fff !important; box-shadow:none !important; break-inside:avoid }
+  .table-wrap{ max-height:none !important; overflow:visible !important }
+  .projections-grid{ display:grid !important; grid-template-columns:1fr 1fr !important; gap:8px !important }
+  .parts-sketches{ display:grid !important; grid-template-columns:1fr 1fr !important; gap:8px !important }
+  .estimate-grid{ display:grid !important; grid-template-columns:1fr 1fr !important; gap:8px !important }
+  .stepper-grid{ display:grid !important; grid-template-columns:repeat(4,1fr) !important }
+  svg{ max-width:100% !important; height:auto !important }
+  .canvas-wrap svg{ max-height:none !important }
+  /* белый фон и чёрный текст во всём контенте */
+  .main *{ background-color:#fff !important; color:#000 !important; box-shadow:none !important }
+  .main *::before,.main *::after{ background-color:transparent !important; color:#000 !important }
+  .tab-panel::before{ background-color:#fff !important }
+  tr,td,th{ break-inside:avoid }
 }
 
+/* Mobile / narrow window: one screen at a time — «Параметры» или «Результат» */
+.view-switch{display:none}
 @media (max-width: 980px){
-  .layout{grid-template-columns:1fr}
-  .panel-left{border-right:none;border-bottom:1px solid var(--line)}
+  /* APK — edge-to-edge (WebView за системными барами): цепочка vh→svh→dvh
+     + safe-area padding, чтобы нижнее меню не пряталось за системной панелью */
+  #app{display:grid;grid-template-rows:auto auto 1fr auto;height:100vh;height:100svh;height:100dvh;overflow:hidden}
+  .header{padding-top:env(safe-area-inset-top, 0px)}
+  .view-switch{display:flex;gap:8px;padding:8px 12px;background:var(--bg2);border-bottom:1px solid var(--line)}
+  .view-switch button{flex:1;padding:10px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--text);font-weight:800;font-size:12px;cursor:pointer}
+  .view-switch button.active{background:var(--accent2);color:#fff;border-color:var(--accent2)}
+  .layout{grid-template-columns:1fr;grid-template-rows:1fr;height:100%;min-height:0}
+  .panel-left{border-right:none;border-bottom:none;min-height:0}
+  .main{min-height:0}
+  body.view-params .main{display:none}
+  body:not(.view-params) .panel-left{display:none}
+  body.view-params .mobile-nav{display:none}
   .projections-grid{grid-template-columns:1fr}
   .estimate-grid{grid-template-columns:1fr}
-  .mobile-nav{display:flex}
+  .mobile-nav{display:flex;position:static;padding-bottom:calc(env(safe-area-inset-bottom, 0px) + 6px)}
   .header .badge{display:none}
 }
 @media (max-width: 640px){
@@ -199,4 +237,134 @@ input,select,button{font-family:inherit}
   .grid2{grid-template-columns:1fr}
   .stepper-grid{grid-template-columns:1fr 1fr}
   .canvas-toolbar{flex-direction:column;align-items:stretch}
+  .pm-grid{grid-template-columns:1fr}
 }
+
+/* ===== Кликабельные детали в сборке ===== */
+.asm-click:hover{ filter:brightness(.92) }
+@keyframes hlpulse{ 0%,100%{opacity:1} 50%{opacity:.45} }
+.hl-pulse{ animation:hlpulse 1.15s ease-in-out infinite }
+.asm-hint{ margin-top:8px;font-size:11px;color:#64748b;text-align:center }
+
+/* info-строка выбранной детали */
+#assemblyInfo{ margin-top:10px }
+.asm-info-item{ background:#fff;border:1.5px solid var(--accent);border-radius:12px;padding:10px 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;box-shadow:0 4px 14px rgba(242,193,78,.25) }
+.asm-info-dot{ width:12px;height:12px;border-radius:50%;background:var(--accent);border:2px solid #a16207;flex-shrink:0 }
+.asm-info-name{ font-weight:800;color:var(--accent2) }
+.asm-info-dims{ font-family:'JetBrains Mono',monospace;font-size:12px;color:#334155;background:var(--panel2);padding:3px 8px;border-radius:8px }
+.asm-info-holes{ font-size:11px;color:#64748b;flex:1;min-width:120px }
+
+/* ===== Таблица деталей: кликабельные строки ===== */
+.parts-hint{ font-size:11px;color:#64748b;background:#fff;border:1px dashed var(--line2);border-radius:10px;padding:8px 10px;margin-bottom:10px }
+.parts-table tr.row-clickable{ cursor:pointer }
+.parts-table tr.row-clickable:hover td{ background:#fef9e7 !important }
+.parts-table tr.row-selected td{ background:#fde68a !important }
+.part-open-cell{ text-align:center }
+.part-open-btn{ border:1px solid var(--line2);background:#fff;border-radius:8px;width:32px;height:30px;cursor:pointer;font-size:14px }
+.part-open-btn:hover{ background:var(--accent);border-color:#a16207 }
+.parts-table tr.row-selected .part-open-btn{ background:var(--accent) }
+.part-sketch.sketch-clickable{ cursor:pointer;transition:.15s }
+.part-sketch.sketch-clickable:hover{ border-color:var(--accent);transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.08) }
+.part-sketch.sketch-selected{ border-color:var(--accent);box-shadow:0 0 0 2px rgba(242,193,78,.5) }
+
+/* ===== Модалка карточки детали ===== */
+.pm-overlay{ position:fixed;inset:0;background:rgba(15,30,24,.55);backdrop-filter:blur(3px);z-index:50;display:none;overflow:auto;padding:20px 12px 80px }
+.pm-overlay.open{ display:block;animation:fade .18s ease }
+.pm-card{ max-width:1060px;margin:0 auto;background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.35) }
+.pm-head{ background:linear-gradient(135deg,#1e3a2f,#2a5a45);color:#fff;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px }
+.pm-title{ font-size:18px;font-weight:800 }
+.pm-count{ color:var(--accent);font-weight:800 }
+.pm-sub{ font-size:12px;opacity:.85;margin-top:4px;font-family:'JetBrains Mono',monospace }
+.pm-grid{ display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:16px }
+.pm-block{ background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:12px;min-width:0 }
+.pm-block-wide{ grid-column:1 / -1 }
+.pm-block-title{ font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--accent2);margin-bottom:10px }
+.pm-pos svg,.pm-flat svg{ max-width:100%;height:auto;display:block }
+.pm-flat{ background:#fff;border:1px solid var(--line);border-radius:10px;padding:6px }
+.pm-table-wrap{ overflow:auto;background:#fff;border:1px solid var(--line);border-radius:10px }
+.pm-table{ width:100%;border-collapse:collapse;font-size:12px;min-width:520px }
+.pm-table th{ background:var(--accent2);color:#fff;padding:8px 10px;text-align:left;font-size:10px;letter-spacing:.06em;text-transform:uppercase }
+.pm-table td{ padding:8px 10px;border-bottom:1px solid var(--line);font-weight:600 }
+.pm-table tr:nth-child(even) td{ background:#fafaf9 }
+.hole-chip{ display:inline-block;border:1.5px solid;border-radius:99px;padding:2px 8px;font-size:11px;font-weight:800;background:#fff }
+.pm-joint{ background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px }
+.pm-joint-title{ font-weight:800;font-size:13px;color:var(--accent2) }
+.pm-joint-sub{ font-size:12px;color:#475569;margin-top:3px }
+.pm-joint-fast{ margin-top:6px;display:flex;gap:6px;flex-wrap:wrap }
+.pm-joint-note{ margin-top:6px;font-size:11px;color:#92400e;background:#fffbeb;border-radius:8px;padding:6px 8px }
+.pm-empty{ font-size:12px;color:#64748b;padding:10px;background:#fff;border:1px dashed var(--line2);border-radius:10px;text-align:center }
+.pm-footer{ position:sticky;bottom:0;display:flex;gap:10px;justify-content:center;padding:14px;background:rgba(255,255,255,0);margin-top:10px;max-width:1060px;margin-left:auto;margin-right:auto }
+.pm-footer-btn{ min-width:200px }
+.pm-footer .btn-primary{ width:auto;padding:12px 18px }
+.pm-footer .btn-ghost{ width:auto;padding:12px 18px }
+
+/* ===== Вкладка «Крепёж» ===== */
+.joints-totals{ display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:14px }
+.joints-section-title{ font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent2);margin:4px 0 8px;opacity:.85 }
+.joint-row{ cursor:pointer }
+.joint-row:hover td{ background:#fef9e7 !important }
+
+/* ===== Металл ===== */
+.metal-cut-card{ background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:var(--shadow);margin-bottom:16px }
+.metal-cut-table{ min-width:560px }
+.metal-cut-note{ padding:10px 14px;background:#eff6ff;border-top:1px solid #bfdbfe;font-size:12px;color:#1e40af;line-height:1.5 }
+
+/* ===== Полноэкранный просмотр эскиза (zoom) ===== */
+.zoom-overlay{ position:fixed;inset:0;z-index:90;background:rgba(10,20,15,.94);display:none;touch-action:none;overscroll-behavior:none }
+.zoom-overlay.open{ display:block;animation:fade .18s ease }
+.zoom-top{ position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;z-index:2;pointer-events:none }
+.zoom-title{ color:#e2e8f0;font-weight:800;font-size:13px;max-width:52vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis }
+.zoom-btns{ display:flex;gap:6px;pointer-events:auto }
+.zoom-btn{ width:42px;height:42px;border-radius:12px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.1);color:#fff;font-size:18px;font-weight:800;cursor:pointer;backdrop-filter:blur(6px) }
+.zoom-btn:active{ background:var(--accent);color:#1a1a1a }
+.zoom-stage{ position:absolute;inset:0;display:grid;place-items:center;overflow:hidden;cursor:grab }
+.zoom-stage:active{ cursor:grabbing }
+.zoom-box{ will-change:transform;transition:transform .05s linear }
+.zoom-box svg{ width:min(92vw,860px);height:auto;max-height:calc(100vh - 120px);display:block;filter:drop-shadow(0 20px 60px rgba(0,0,0,.5)) }
+.zoom-hint{ position:absolute;bottom:10px;left:0;right:0;text-align:center;color:rgba(226,232,240,.55);font-size:11px;pointer-events:none;transition:opacity .3s }
+/* кликабельные эскизы в карточке детали */
+.pm-pos.zoomable,.pm-flat.zoomable{ cursor:zoom-in;position:relative }
+.pm-pos.zoomable::after,.pm-flat.zoomable::after{ content:'🔍 нажми — увеличить';position:absolute;top:6px;right:6px;background:rgba(255,255,255,.92);border:1px solid var(--line2);border-radius:99px;font-size:10px;font-weight:700;color:var(--accent2);padding:3px 8px;pointer-events:none }
+
+/* ===== мои материалы (свой размер листа) ===== */
+.custom-mat{margin-top:12px;padding:10px;background:#f8fafc;border:1px dashed var(--line2);border-radius:10px}
+.custom-mat-title{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--accent2);margin-bottom:8px}
+.custom-mat-list{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.custom-mat-chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:5px 10px;border-radius:99px;border:1px solid var(--line2);background:#fff;cursor:pointer}
+.custom-mat-chip:hover{border-color:var(--accent2)}
+.custom-mat-chip.active{background:var(--accent);color:var(--accent2);border-color:var(--accent)}
+.custom-mat-x{font-size:10px;opacity:.6}
+.custom-mat-x:hover{opacity:1}
+/* узел стыковки в карточке детали */
+.pm-split-note{margin-top:6px;font-size:12px;font-weight:600;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:6px 10px}
+/* бейдж максимальной нагрузки на полку */
+.load-badge{display:inline-block;font-weight:800;color:#1e3a2f;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:99px;padding:1px 8px;font-size:11px;white-space:nowrap}
+/* колонка «разметка отверстий» в списке деталей */
+.holes-cell{color:#2563eb;font-weight:700;cursor:pointer;white-space:nowrap}
+.holes-cell:hover{text-decoration:underline}
+/* кнопки масштаба шрифта в шапке */
+.font-btn{font-weight:800;letter-spacing:.02em}
+
+/* ===== Справка (пошаговая инструкция) ===== */
+.help-card{ max-width:820px }
+.help-head{ background:linear-gradient(135deg,#1e3a2f,#2a5a45);padding:18px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px }
+.help-actions{ margin-top:10px }
+.help-upd-btn{ background:#f2c14e !important;color:#1e3a2f !important;font-weight:800;box-shadow:0 2px 10px rgba(0,0,0,.25) }
+.help-upd-btn:active{ transform:scale(.97) }
+.help-title{ font-size:17px;font-weight:800;color:#fff }
+.help-sub{ font-size:12px;color:rgba(255,255,255,.65);margin-top:3px }
+.help-body{ padding:16px 20px 24px }
+.help-section{ padding:12px 0;border-bottom:1px solid #e7e5e4 }
+.help-section:last-child{ border-bottom:none }
+.help-h{ font-size:14px;font-weight:800;color:#1e3a2f;margin-bottom:6px }
+.help-section p{ font-size:13px;color:#334155;line-height:1.55;margin:4px 0 }
+.help-note{ font-size:12px !important;color:#64748b !important }
+.help-grid{ display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px }
+.help-item{ font-size:12px;color:#334155;line-height:1.5;background:#f6f3ec;border:1px solid #e7e5e4;border-radius:10px;padding:10px 12px }
+.help-item b{ color:#1e3a2f }
+.help-dev .dev-card{ background:#f6f3ec;border:1px solid #d6cfa8;border-radius:12px;padding:12px 14px;margin:8px 0 }
+.dev-name{ font-size:14px;font-weight:800;color:#1e3a2f;margin-bottom:6px }
+.dev-row{ font-size:13px;margin:3px 0 }
+.dev-row a{ color:#1e3a2f;font-weight:700;text-decoration:none;border-bottom:1px dashed #a16207 }
+.dev-row a:active{ color:#a16207 }
+@media (max-width:640px){ .help-grid{ grid-template-columns:1fr } }

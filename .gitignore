@@ -11,6 +11,11 @@ android/.gradle/
 android/local.properties
 android/app/release/
 android/*.keystore
+# ПЕРМАНЕНТНЫЙ КЛЮЧ ПОДПИСИ APK — ОБЯЗАТЕЛЬНО должен остаться в репозитории!
+# Все агенты собирают APK с этим ключом, чтобы обновление ставилось поверх установленного.
+# См. README.md → «Подпись APK» и android/keystore/README.md
+!android/keystore/
+!android/keystore/*
 android/app/src/main/assets/www/
 
 # OS

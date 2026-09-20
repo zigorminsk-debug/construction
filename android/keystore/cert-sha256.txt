@@ -1,0 +1,2 @@
+SHA-256 fingerprint (должен совпадать при проверке APK):
+sha256 Fingerprint=D0:E2:78:71:69:70:38:CF:2F:CC:EC:E4:2E:F7:4C:F4:B7:24:92:6D:66:20:78:2E:98:CC:AE:C4:B7:0A:3E:4A

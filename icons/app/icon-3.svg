@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- 3 · «Каркас из профиля» — изометрический каркас (как в расчёте металлической рамы) -->
+  <g id="art">
+    <polygon points="256,96 392,168 256,240 120,168" fill="#2a5a45"/>
+    <g fill="none" stroke="#f2c14e" stroke-width="28" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M256 96 L392 168 L392 344 L256 416 L120 344 L120 168 Z"/>
+      <path d="M120 168 L256 240 L392 168"/>
+      <path d="M256 240 L256 416"/>
+    </g>
+  </g>
+</svg>

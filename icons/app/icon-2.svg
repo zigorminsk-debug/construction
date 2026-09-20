@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- 2 · «Раскрой» — лист с линиями реза и выделенной деталью -->
+  <g id="art">
+    <rect x="100" y="96" width="312" height="320" rx="14" fill="none" stroke="#f2c14e" stroke-width="28"/>
+    <line x1="118" y1="270" x2="394" y2="270" stroke="#f2c14e" stroke-width="14" stroke-linecap="round" stroke-dasharray="2 34"/>
+    <line x1="256" y1="114" x2="256" y2="398" stroke="#f2c14e" stroke-width="14" stroke-linecap="round" stroke-dasharray="2 34"/>
+    <rect x="136" y="306" width="92" height="80" rx="8" fill="#f2c14e"/>
+  </g>
+</svg>

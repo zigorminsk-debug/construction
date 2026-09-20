@@ -6,8 +6,38 @@
  * - Карта раскроя
  */
 
-export function drawAssembly(container, parts, params, mode='iso', exploded=false){
+// ==================== Поворот изделия (90° вокруг вертикали) ====================
+/** Вращение точки вокруг вертикальной оси: rot 0..3 */
+function rotPoint(W, D, rot, x, y, z){
+  switch(((rot % 4) + 4) % 4){
+    case 1: return [z, y, W - x]
+    case 2: return [W - x, y, D - z]
+    case 3: return [D - z, y, x]
+    default: return [x, y, z]
+  }
+}
+/** Изометрическая проекция с учётом поворота */
+function makeIso(W, H, D, rot, cx, cy){
+  const r = ((rot % 4) + 4) % 4
+  const Wenv = r % 2 === 0 ? W : D
+  const Denv = r % 2 === 0 ? D : W
+  const scale = Math.min(260 / Wenv, 220 / H, 260 / Denv) * 0.85
+  const cos30 = Math.cos(30*Math.PI/180), sin30 = Math.sin(30*Math.PI/180)
+  return {
+    rot: r,
+    iso: (x, y, z)=>{
+      const [rx, ry, rz] = rotPoint(W, D, r, x, y, z)
+      return { X: cx + (rx - rz)*cos30*scale, Y: cy + (rx + rz)*sin30*scale - ry*scale }
+    }
+  }
+}
+
+/**
+ * model = { items, ghosts, joints, metal } — из joinery.buildLayout()
+ */
+export function drawAssembly(container, model, params, mode='iso', exploded=false, selectedKey=null, showFasteners=false){
   container.innerHTML = ''
+  const parts = model ? model.items : []
   const W = params.W, H = params.H, D = params.D
   const t = params.t
 
@@ -40,25 +70,136 @@ export function drawAssembly(container, parts, params, mode='iso', exploded=fals
     svg.appendChild(g('line',{x1:0,y1:i,x2:640,y2:i,stroke:'#f1f5f9','stroke-width':1,opacity:0.6}))
   }
 
-  if(mode==='front'){
+  if(model && model.metal){
+    drawIsoMetal(svg, g, model, params, exploded, selectedKey, showFasteners)
+  }else if(mode==='front'){
     drawFront(svg, W,H,D,t, parts, params, exploded)
   }else if(mode==='side'){
     drawSide(svg, W,H,D,t, parts, params)
   }else{
-    drawIso(svg, W,H,D,t, parts, params, exploded)
+    drawIso(svg, W,H,D,t, parts, params, exploded, model, selectedKey, showFasteners)
+    // каркас из профтрубы (гибрид корпус+рамa): стойки и рамы поверх схематичной изометрии
+    if(params.metalFrame && model){
+      const { iso: iso2 } = makeIso(W, H, D, params.rotate || 0, 320, 300)
+      const f = (pts, fill, stroke, sw, opacity, key)=>{
+        const d = pts.map((p,i)=> `${i===0?'M':'L'} ${p.X} ${p.Y}`).join(' ') + ' Z'
+        const el = g('path',{d, fill, stroke, 'stroke-width': sw, opacity})
+        if(key){ el.setAttribute('data-key', key); el.setAttribute('class','asm-click'); el.style.cursor='pointer' }
+        svg.appendChild(el)
+      }
+      model.items.filter(it=> it.metal).forEach(it=>{
+        const c = isoBoxCorners(iso2, it.x, it.y, it.z, it.x+it.w, it.y+it.h, it.z+it.d)
+        f([c.front[0],c.front[1],c.front[2],c.front[3]], '#c3ced9', '#475569', 1, 0.96, it.key)
+        f([c.right[0],c.right[1],c.right[2],c.right[3]], '#9fb0bf', '#475569', 1, 0.96, it.key)
+        f([c.top[0],c.top[1],c.top[2],c.top[3]], '#dbe2ea', '#475569', 1, 0.96, it.key)
+      })
+    }
   }
 
   // подпись
   const label = g('text',{x:12,y:18,'font-size':11,'font-weight':800,fill:'#1e3a2f','letter-spacing':'0.06em'})
-  label.textContent = mode==='iso' ? 'ИЗОМЕТРИЯ • М 1:10' : mode==='front' ? 'ВИД СПЕРЕДИ • ФАСАД' : 'ВИД СБОКУ'
+  label.textContent = (model && model.metal) ? 'МЕТАЛЛИЧЕСКАЯ РАМА • ИЗОМЕТРИЯ' : mode==='iso' ? 'ИЗОМЕТРИЯ • М 1:10' : mode==='front' ? 'ВИД СПЕРЕДИ • ФАСАД' : 'ВИД СБОКУ'
   svg.appendChild(label)
 
   const dims = g('text',{x:12,y:34,'font-size':10,'font-family':'JetBrains Mono, monospace',fill:'#64748b'})
-  dims.textContent = `${W} × ${H} × ${D} мм  •  ${params.materialLabel} ${t}мм  •  ${parts.length} дет.`
+  const matLabel = (model && model.metal) ? (params._profile ? `Профиль ${params._profile.a}×${params._profile.b}×${params._profile.wall}` : 'Профиль') : `${params.materialLabel} ${t}мм`
+  dims.textContent = `${W} × ${H} × ${D} мм  •  ${matLabel}  •  ${parts.length} дет.`
   svg.appendChild(dims)
 
   container.appendChild(svg)
 }
+
+// ==================== Металлическая рама (изометрия) ====================
+function isoBoxCorners(iso, x0,y0,z0, x1,y1,z1){
+  return {
+    top:  [iso(x0,y1,z0), iso(x1,y1,z0), iso(x1,y1,z1), iso(x0,y1,z1)],
+    right:[iso(x1,y0,z0), iso(x1,y0,z1), iso(x1,y1,z1), iso(x1,y1,z0)],
+    front:[iso(x0,y0,z0), iso(x1,y0,z0), iso(x1,y1,z0), iso(x0,y1,z0)]
+  }
+}
+
+function drawIsoMetal(svg, g, model, params, exploded, selectedKey, showFasteners){
+  const W = params.W, H = params.H, D = params.D
+  const { iso, rot } = makeIso(W, H, D, params.rotate || 0, 320, 300)
+  function face(pts, fill, stroke, sw=1, opacity=1, extra={}){
+    const d = pts.map((p,i)=> `${i===0?'M':'L'} ${p.X} ${p.Y}`).join(' ') + ' Z'
+    const el=g('path',{d,fill,stroke,'stroke-width':sw,opacity,...extra})
+    svg.appendChild(el)
+    return el
+  }
+
+  const exp = exploded ? 14 : 0
+  // разнес: полки/рамы выше — смещаем по уровню y
+  const all = [...(model.ghosts||[]), ...model.items]
+  // сортировка отрисовки по ПОВЁРНУТЫМ координатам (чтобы ближние рисовались поверх)
+  const rc = (it)=> rotPoint(W, D, rot, it.x + it.w/2, 0, it.z + it.d/2)
+  const sorted = all.slice().sort((a,b)=>{
+    const ca = rc(a), cb = rc(b)
+    if(Math.abs(ca[2]-cb[2]) > 1) return cb[2] - ca[2]          // дальние (задние) сначала
+    if(Math.abs(ca[0]-cb[0]) > 1) return ca[0] - cb[0]          // левые сначала
+    return (a.y+a.h/2) - (b.y+b.h/2)
+  })
+
+  const selected = model.items.find(i=> i.key === selectedKey)
+  const selIdx = selected ? all.indexOf(selected) : -1
+
+  sorted.forEach(it=>{
+    const isSel = it === selected
+    const dimmed = selected && !isSel
+    const dy = exploded ? -exp * (it.y / Math.max(1,H)) : 0
+    const c = isoBoxCorners(iso, it.x, it.y+dy, it.z, it.x+it.w, it.y+it.h+dy, it.z+it.d)
+    let topF, rightF, frontF, strokeC, sw
+    if(isSel){
+      topF='#f2c14e'; rightF='#e0a93a'; frontF='#f7d489'; strokeC='#7c4a03'; sw=2
+    }else if(it.metal){
+      topF='#dbe2ea'; rightF='#9fb0bf'; frontF='#c3ced9'; strokeC='#475569'; sw=1
+    }else if(it.part && it.part.material && it.part.material.includes('ДВП')){
+      topF='#e2e8f0'; rightF='#cbd5e1'; frontF='#e8edf2'; strokeC='#94a3b8'; sw=0.8
+    }else{
+      topF='#fde68a'; rightF='#f2c14e'; frontF='#fef3c7'; strokeC='#a16207'; sw=0.9
+    }
+    const op = dimmed ? 0.35 : 1
+    face(c.front, frontF, strokeC, sw, op, isSel?{class:'hl-pulse'}:{})
+    face(c.right, rightF, strokeC, sw, op, isSel?{class:'hl-pulse'}:{})
+    face(c.top,   topF,   strokeC, sw, op, isSel?{class:'hl-pulse'}:{})
+    if(isSel){
+      // контур пунктиром
+      const outline = [c.top[1], c.top[2], c.right[3], c.right[2]]
+      svg.appendChild(g('path',{d: outline.map((p,i)=>`${i===0?'M':'L'} ${p.X} ${p.Y}`).join(' ') + ' L '+c.front[0].X+' '+c.front[0].Y+' Z', fill:'none', stroke:'#b45309','stroke-width':1.6,'stroke-dasharray':'5 3',class:'hl-pulse'}))
+      // подпись
+      const mid = iso(it.x + it.w/2, it.y + it.h + dy, it.z + it.d/2)
+      const lbl = it.name.length > 26 ? it.name.slice(0,25)+'…' : it.name
+      const bw = lbl.length * 6.2 + 14
+      svg.appendChild(g('line',{x1:mid.X,y1:mid.Y,x2:mid.X,y2:mid.Y-26,stroke:'#b45309','stroke-width':1,'stroke-dasharray':'3 2'}))
+      svg.appendChild(g('rect',{x:mid.X-bw/2,y:mid.Y-44,width:bw,height:20,rx:9,fill:'#1e3a2f',opacity:0.95}))
+      const tx=g('text',{x:mid.X,y:mid.Y-30,'text-anchor':'middle','font-size':10,'font-weight':800,fill:'#f2c14e'})
+      tx.textContent = lbl
+      svg.appendChild(tx)
+    }
+  })
+
+  // отверстия (крепёж)
+  if(showFasteners){
+    drawIsoFasteners(svg, g, iso, model.items, selectedKey)
+  }
+}
+
+// Точки отверстий на видимых гранях (x+, z-, y+)
+export function drawIsoFasteners(svg, g, iso, items, selectedKey){
+  const visible = f => f==='x+' || f==='z-' || f==='y+'
+  items.forEach(it=>{
+    const isSel = it.key === selectedKey
+    ;(it.worldHoles||[]).forEach(hl=>{
+      if(!hl.face || !visible(hl.face)) return
+      const p = iso(hl.x, hl.y, hl.z)
+      const r = Math.max(2.2, hl.d * 0.16)
+      const color = FAST_COLORS[hl.t] || '#0f172a'
+      svg.appendChild(g('circle',{cx:p.X,cy:p.Y,r,fill:'none',stroke:color,'stroke-width':isSel?1.8:1.2,opacity:isSel?1:0.85}))
+      svg.appendChild(g('circle',{cx:p.X,cy:p.Y,r:0.9,fill:color,opacity:isSel?1:0.85}))
+    })
+  })
+}
+const FAST_COLORS = { dowel:'#1e3a2f', minifix:'#dc2626', screw:'#64748b', hinge:'#0284c7', pin:'#d97706', bolt:'#0f172a', selft:'#7c3aed' }
 
 function drawFront(svg, W,H,D,t, parts, params, exploded){
   const svgNS='http://www.w3.org/2000/svg'
@@ -196,33 +337,25 @@ function drawSide(svg, W,H,D,t, parts, params){
   svg.appendChild(t2)
 }
 
-function drawIso(svg, W,H,D,t, parts, params, exploded){
+function drawIso(svg, W,H,D,t, parts, params, exploded, model=null, selectedKey=null, showFasteners=false){
   const svgNS='http://www.w3.org/2000/svg'
   const g=(tag,a={})=>{const e=document.createElementNS(svgNS,tag);for(const k in a)e.setAttribute(k,a[k]);return e}
 
-  // изометрическая проекция: используем диметрию 30°
-  const scale = Math.min(260 / W, 220 / H, 260 / D) * 0.85
-  const cx=320, cy=300
-
-  // углы для изометрии
-  const cos30 = Math.cos(30*Math.PI/180) // 0.866
-  const sin30 = Math.sin(30*Math.PI/180) // 0.5
-
-  // 3D box corners: (x,y,z) -> (X,Y) iso: X = cx + (x - z)*cos30*scale , Y = cy + (x+z)*sin30*scale - y*scale
-  // где x = ширина (W), z = глубина (D), y = высота (H) вверх
-  function iso(x,y,z){
-    return {
-      X: cx + (x - z)*cos30*scale,
-      Y: cy + (x + z)*sin30*scale - y*scale
-    }
-  }
+  // изометрическая проекция (диметрия 30°) с учётом поворота:
+  // x = ширина (W), z = глубина (D), y = высота (H) вверх
+  const { iso } = makeIso(W, H, D, params.rotate || 0, 320, 300)
 
   const exp = exploded ? 18 : 0
 
   // helper to draw face
-  function face(points, fill, stroke, sw=1, opacity=1){
+  function face(points, fill, stroke, sw=1, opacity=1, key=null){
     const d = points.map((p,i)=> `${i===0?'M':'L'} ${p.X} ${p.Y}`).join(' ') + ' Z'
     const el=g('path',{d,fill,stroke,'stroke-width':sw,opacity})
+    if(key){
+      el.setAttribute('data-key', key)
+      el.setAttribute('class', 'asm-click')
+      el.style.cursor='pointer'
+    }
     svg.appendChild(el)
     return el
   }
@@ -259,20 +392,20 @@ function drawIso(svg, W,H,D,t, parts, params, exploded){
 
   // задняя стенка
   if(params.rear){
-    face([c00D,cW0D,cWHD,c0HD], '#e2e8f0','#94a3b8',1.2)
+    face([c00D,cW0D,cWHD,c0HD], '#e2e8f0','#94a3b8',1.2, 1, 'rear')
     // крепёж задней
     svg.appendChild(g('circle',{cx: (c00D.X + c0HD.X)/2, cy:(c00D.Y + c0HD.Y)/2, r:2, fill:'#64748b'}))
   }
 
   // левая боковина
-  face([c000,c00D,c0HD,c00H], '#ffffff','#1e3a2f',1.8)
+  face([c000,c00D,c0HD,c00H], '#ffffff','#1e3a2f',1.8, 1, 'side-L')
   // толщина кромки левой
   // правая боковина
-  face([cW00,cW0D,cWHD,cW0H], '#e7e5e4','#1e3a2f',1.8)
+  face([cW00,cW0D,cWHD,cW0H], '#e7e5e4','#1e3a2f',1.8, 1, 'side-R')
   // передняя?? Actually боковины уже есть
 
   // крыша
-  face([c00H,cW0H,cWHD,c0HD], '#f2c14e','#a16207',1.4)
+  face([c00H,cW0H,cWHD,c0HD], '#f2c14e','#a16207',1.4, 1, 'top')
   // фаска крыши
   face([c00H,cW0H,cW00,c000], '#fef9e7','#a16207',1) // no, this is front face
 
@@ -290,11 +423,11 @@ function drawIso(svg, W,H,D,t, parts, params, exploded){
       const p3 = iso(W-t, y, D-12)
       const p4 = iso(t, y, D-12)
       if(exploded){ p1.Y-=exp*0.2*i; p2.Y-=exp*0.2*i; p3.Y-=exp*0.2*i; p4.Y-=exp*0.2*i }
-      face([p1,p2,p3,p4], '#fde68a','#a16207',1,0.95)
+      face([p1,p2,p3,p4], '#fde68a','#a16207',1,0.95, `shelf-${i}`)
       // торец полки
       const p1b = iso(t, y-t, 4)
       const p2b = iso(W-t, y-t, 4)
-      face([p1,p2,p2b,p1b], '#facc15','#a16207',0.8,1)
+      face([p1,p2,p2b,p1b], '#facc15','#a16207',0.8,1, `shelf-${i}`)
     }
   }
 
@@ -317,7 +450,7 @@ function drawIso(svg, W,H,D,t, parts, params, exploded){
       const dD = iso(x0, y1, -off)
       if(exploded){ dA.X -= exp*0.6*(i - params.doors/2); dB.X -= exp*0.6*(i - params.doors/2); dC.X -= exp*0.6*(i - params.doors/2); dD.X -= exp*0.6*(i - params.doors/2); dA.Y-=exp*0.3; dB.Y-=exp*0.3; dC.Y-=exp*0.3; dD.Y-=exp*0.3 }
       const col = i%2===0 ? '#1e3a2f' : '#2a5a45'
-      face([dA,dB,dC,dD], col,'#0f1e18',1.2)
+      face([dA,dB,dC,dD], col,'#0f1e18',1.2, 1, `door-${i}`)
       // inset
       const inset=14
       const iA = iso(x0+inset, y0+inset, -off-0.5)
@@ -361,9 +494,31 @@ function drawIso(svg, W,H,D,t, parts, params, exploded){
   if(params.base){
     const bh=80
     const bA=iso(0,bh,0), bB=iso(W,bh,0), bC=iso(W,0,0), bD=iso(0,0,0)
-    face([bA,bB,bC,bD], '#44403c','#1c1917',1)
+    face([bA,bB,bC,bD], '#44403c','#1c1917',1, 1, 'base')
     const b2A=iso(0,bh,D), b2B=iso(W,bh,D), b2C=iso(W,0,D), b2D=iso(0,0,D)
-    face([bA,bB,b2B,b2A], '#57534e','#1c1917',1)
+    face([bA,bB,b2B,b2A], '#57534e','#1c1917',1, 1, 'base')
+  }
+
+  // купные металлические ножки (призрак — не деталь раскроя)
+  if(model && model.ghosts && model.ghosts.length){
+    model.ghosts.forEach(it=>{
+      const c = isoBoxCorners(iso, it.x, it.y, it.z, it.x+it.w, it.y+it.h, it.z+it.d)
+      face([c.front[0],c.front[1],c.front[2],c.front[3]], '#cbd5e1','#64748b',1,0.92)
+      face([c.right[0],c.right[1],c.right[2],c.right[3]], '#94a3b8','#64748b',1,0.92)
+      face([c.top[0],c.top[1],c.top[2],c.top[3]], '#e2e8f0','#64748b',1,0.92)
+    })
+  }
+
+  // крепёж (отверстия) — точки на видимых гранях
+  if(showFasteners && model){
+    drawIsoFasteners(svg, g, iso, model.items, selectedKey)
+  }
+
+  // подсветка выбранной детали (позиция в сборке)
+  if(selectedKey && model){
+    const it = model.items.find(i=> i.key === selectedKey)
+      || model.items.find(i=> selectedKey.split('-').slice(0,-1).join('-') && i.key.startsWith(selectedKey + '-'))
+    if(it) drawIsoHighlight(svg, g, iso, it)
   }
 
   // габариты стрелки
@@ -516,11 +671,14 @@ function drawProjectionSVG(el, params, view){
 export function drawPartSketch(container, part){
   const svgNS='http://www.w3.org/2000/svg'
   const svg=document.createElementNS(svgNS,'svg')
+  // metal-профиль: рисуем полосу «длина × фаска»
+  const isMetal = part.kind === 'metal'
+  const hEff = isMetal ? 20 : part.h
   // viewBox adapts to part ratio
-  const maxW = Math.max(part.w, part.h)
-  const scale = Math.min(180 / part.w, 110 / part.h) * 0.9
+  const maxW = Math.max(part.w, hEff)
+  const scale = isMetal ? Math.min(180 / part.w, 1.4) : Math.min(180 / part.w, 110 / hEff) * 0.9
   const w = part.w * scale
-  const h = part.h * scale
+  const h = hEff * scale
   const pad = 24
   const vbW = w + pad*2
   const vbH = h + pad*2 + 20
@@ -552,17 +710,19 @@ export function drawPartSketch(container, part){
 
   // dims
   const tW=g('text',{x:x+w/2,y:y+h+14,'text-anchor':'middle','font-size':8,'font-family':'JetBrains Mono, monospace','font-weight':700,fill:'#1e3a2f'})
-  tW.textContent = `${part.w}`
+  tW.textContent = isMetal ? `${part.w} мм` : `${part.w}`
   svg.appendChild(tW)
-  const tH=g('text',{x:x+w+8,y:y+h/2,'text-anchor':'middle','font-size':8,'font-family':'JetBrains Mono, monospace','font-weight':700,fill:'#1e3a2f',transform:`rotate(90 ${x+w+8} ${y+h/2})`})
-  tH.textContent=`${part.h}`
-  svg.appendChild(tH)
+  if(!isMetal){
+    const tH=g('text',{x:x+w+8,y:y+h/2,'text-anchor':'middle','font-size':8,'font-family':'JetBrains Mono, monospace','font-weight':700,fill:'#1e3a2f',transform:`rotate(90 ${x+w+8} ${y+h/2})`})
+    tH.textContent=`${part.h}`
+    svg.appendChild(tH)
+  }
 
   // thickness badge
-  const badgeW=46, badgeH=14
+  const badgeW= isMetal ? 64 : 46, badgeH=14
   svg.appendChild(g('rect',{x:x+w - badgeW,y:y-8,width:badgeW,height:badgeH,rx:7,fill:'#1e3a2f'}))
   const tb=g('text',{x:x+w - badgeW/2,y:y+3,'text-anchor':'middle','font-size':7,'font-weight':800,fill:'#f2c14e'})
-  tb.textContent=`${part.thickness} мм`
+  tb.textContent= isMetal ? `профиль ${part.section||''}` : `${part.thickness} мм`
   svg.appendChild(tb)
 
   container.appendChild(svg)
@@ -648,6 +808,290 @@ export function drawCuttingSheet(container, sheet, sheetW, sheetH){
   const te=g('text',{x:pad+42,y:pad+18,'text-anchor':'middle','font-size':8,'font-weight':800,fill:'#fff'})
   te.textContent=`${eff}% занято`
   svg.appendChild(te)
+
+  container.appendChild(svg)
+}
+
+// ==================== Подсветка выбранной детали в изометрии ====================
+function drawIsoHighlight(svg, g, iso, item){
+  const c = isoBoxCorners(iso, item.x, item.y, item.z, item.x+item.w, item.y+item.h, item.z+item.d)
+  const accent = 'rgba(242,193,78,.4)'
+  ;[c.front, c.right, c.top].forEach(f=>{
+    const d = f.map((p,i)=> `${i===0?'M':'L'} ${p.X} ${p.Y}`).join(' ') + ' Z'
+    svg.appendChild(g('path',{d, fill:accent, stroke:'#b45309','stroke-width':2,'stroke-dasharray':'6 3', class:'hl-pulse'}))
+  })
+  // подпись
+  const mid = iso(item.x + item.w/2, item.y + item.h, item.z + item.d/2)
+  const dims = item.metal ? `${Math.round(item.plateW)} мм • ${item.section||''}` : `${Math.round(item.plateW)} × ${Math.round(item.plateH)} × ${item.thick}`
+  const lbl = `${item.name} • ${dims}`
+  const bw = lbl.length * 6 + 16
+  const bx = Math.max(8, Math.min(640 - bw - 8, mid.X - bw/2))
+  const by = Math.max(40, mid.Y - 56)
+  svg.appendChild(g('line',{x1:mid.X,y1:mid.Y,x2:mid.X,y2:by+20,stroke:'#b45309','stroke-width':1,'stroke-dasharray':'3 2'}))
+  svg.appendChild(g('rect',{x:bx,y:by,width:bw,height:20,rx:9,fill:'#1e3a2f',opacity:0.96}))
+  const tx=g('text',{x:bx+bw/2,y:by+13,'text-anchor':'middle','font-size':10,'font-weight':800,fill:'#f2c14e'})
+  tx.textContent = lbl
+  svg.appendChild(tx)
+}
+
+// ==================== Развёртка детали с разметкой отверстий ====================
+const HOLE_STYLE = {
+  dowel:   { fill:'#1e3a2f', stroke:'#1e3a2f' },
+  minifix: { fill:'none',    stroke:'#dc2626' },
+  screw:   { fill:'#ffffff', stroke:'#64748b' },
+  hinge:   { fill:'#e0f2fe', stroke:'#0284c7' },
+  pin:     { fill:'#d97706', stroke:'#d97706' },
+  bolt:    { fill:'#0f172a', stroke:'#0f172a' },
+  selft:   { fill:'#ffffff', stroke:'#7c3aed' },
+}
+
+/**
+ * item — из buildLayout()
+ * Рисует основную грань + торцевые «полоски» (развёртка) с отверстиями и размерами.
+ */
+export function drawPartFlat(container, item, params){
+  const svgNS='http://www.w3.org/2000/svg'
+  const svg=document.createElementNS(svgNS,'svg')
+  const g=(tag,a={})=>{const e=document.createElementNS(svgNS,tag);for(const k in a)e.setAttribute(k,a[k]);return e}
+  const PW = Math.max(1, item.plateW), PH = Math.max(1, item.plateH), T = Math.max(1, item.thick)
+  const isMetal = !!item.metal
+
+  const s = Math.min(300 / PW, 190 / PH, 2.2)
+  const wS = PW * s, hS = PH * s
+  const tS = Math.max(T * s, 10)
+  const padL = tS + 34, padR = tS + 40, padT = tS + 16, padB = tS + 30
+  const vbW = padL + wS + padR
+  const vbH = padT + hS + padB
+  svg.setAttribute('viewBox', `0 0 ${vbW} ${vbH}`)
+  svg.style.width='100%'
+  svg.style.height='auto'
+  svg.style.background='#fff'
+
+  svg.appendChild(g('rect',{x:0,y:0,width:vbW,height:vbH,rx:10,fill:'#ffffff',stroke:'#e7e5e4'}))
+
+  const x0 = padL, y0 = padT
+
+  // ---- торцевые полоски ----
+  svg.appendChild(g('rect',{x:x0, y:y0-tS, width:wS, height:tS, fill:'#f1f5f9',stroke:'#94a3b8','stroke-width':0.8}))          // top
+  svg.appendChild(g('rect',{x:x0, y:y0+hS, width:wS, height:tS, fill:'#f1f5f9',stroke:'#94a3b8','stroke-width':0.8}))          // bottom
+  svg.appendChild(g('rect',{x:x0-tS, y:y0, width:tS, height:hS, fill:'#f1f5f9',stroke:'#94a3b8','stroke-width':0.8}))          // left
+  svg.appendChild(g('rect',{x:x0+wS, y:y0, width:tS, height:hS, fill:'#f1f5f9',stroke:'#94a3b8','stroke-width':0.8}))          // right
+  const stripLabel = (x,y,txt,rot)=>{
+    const e=g('text',{x,y,'font-size':6.5,'font-family':'JetBrains Mono, monospace',fill:'#94a3b8','text-anchor':'middle'})
+    if(rot) e.setAttribute('transform',`rotate(${rot} ${x} ${y})`)
+    e.textContent = txt
+    svg.appendChild(e)
+  }
+  if(wS > 40) stripLabel(x0 + wS/2, y0 - tS + tS/2 + 2, `торец ${T} мм`, 0)
+  if(wS > 40) stripLabel(x0 + wS/2, y0 + hS + tS/2 + 2, `торец ${T} мм`, 0)
+  if(hS > 40) stripLabel(x0 - tS/2, y0 + hS/2, `${T}`, -90)
+  if(hS > 40) stripLabel(x0 + wS + tS/2, y0 + hS/2, `${T}`, 90)
+
+  // ---- основная грань ----
+  svg.appendChild(g('rect',{x:x0+2,y:y0+2,width:wS,height:hS,rx:3,fill:'#000',opacity:0.05}))
+  svg.appendChild(g('rect',{x:x0,y:y0,width:wS,height:hS,rx:2,fill: isMetal? '#e8edf2':'#fff', stroke:'#1e3a2f','stroke-width':1.5}))
+  if(!isMetal){
+    // текстура
+    for(let i=8;i<hS;i+=14){
+      svg.appendChild(g('line',{x1:x0+3,y1:y0+i,x2:x0+wS-3,y2:y0+i,stroke:'#f1f5f9','stroke-width':0.7}))
+    }
+  }else{
+    // металл: центральная линия (ось профиля)
+    svg.appendChild(g('line',{x1:x0+4,y1:y0+hS/2,x2:x0+wS-4,y2:y0+hS/2,stroke:'#94a3b8','stroke-width':0.6,'stroke-dasharray':'6 4'}))
+  }
+
+  // ---- кромка ----
+  const edge = item.part && item.part.edge
+  if(edge && edge !== '-'){
+    if(edge.includes('по периметру')){
+      svg.appendChild(g('rect',{x:x0+1.5,y:y0+1.5,width:wS-3,height:hS-3,rx:2,fill:'none',stroke:'#f2c14e','stroke-width':2.6,opacity:0.95}))
+    }else if(edge.includes('перед')){
+      svg.appendChild(g('rect',{x:x0,y:y0+hS-3,width:wS,height:3,fill:'#f2c14e',stroke:'#a16207','stroke-width':0.5}))
+    }else if(edge.includes('2 длинных')){
+      svg.appendChild(g('rect',{x:x0,y:y0,width:3,height:hS,fill:'#f2c14e',stroke:'#a16207','stroke-width':0.5}))
+      svg.appendChild(g('rect',{x:x0+wS-3,y:y0,width:3,height:hS,fill:'#f2c14e',stroke:'#a16207','stroke-width':0.5}))
+    }
+  }
+
+  // ---- координаты отверстий на экране ----
+  function holePos(hle){
+    if(hle.f === 'M')    return { x: x0 + hle.u * s,          y: y0 + hS - hle.v * s }
+    if(hle.f === 'top')  return { x: x0 + hle.u * s,          y: y0 - tS + (hle.v / T) * tS }
+    if(hle.f === 'bottom') return { x: x0 + hle.u * s,        y: y0 + hS + (hle.v / T) * tS }
+    if(hle.f === 'left') return { x: x0 - tS + (hle.u / T) * tS, y: y0 + hS - hle.v * s }
+    if(hle.f === 'right') return { x: x0 + wS + (hle.u / T) * tS, y: y0 + hS - hle.v * s }
+    return { x: x0, y: y0 }
+  }
+
+  let num = 0
+  item.holes.forEach(hle=>{
+    num++
+    const pos = holePos(hle)
+    const st = HOLE_STYLE[hle.t] || HOLE_STYLE.screw
+    const r = Math.max(3, hle.d * s * 0.6)
+    const cls = g('g',{})
+    cls.setAttribute('class','hole-mark')
+    if(hle.t === 'minifix'){
+      cls.appendChild(g('circle',{cx:pos.x,cy:pos.y,r:r*1.5,fill:'none',stroke:st.stroke,'stroke-width':1.6}))
+      cls.appendChild(g('circle',{cx:pos.x,cy:pos.y,r:r*0.55,fill:st.stroke}))
+    }else if(hle.t === 'hinge'){
+      cls.appendChild(g('circle',{cx:pos.x,cy:pos.y,r:r*1.5,fill:st.fill,stroke:st.stroke,'stroke-width':1.6}))
+      cls.appendChild(g('line',{x1:pos.x-r*1.5,y1:pos.y,x2:pos.x+r*1.5,y2:pos.y,stroke:st.stroke,'stroke-width':0.8}))
+      cls.appendChild(g('line',{x1:pos.x,y1:pos.y-r*1.5,x2:pos.x,y2:pos.y+r*1.5,stroke:st.stroke,'stroke-width':0.8}))
+    }else if(hle.t === 'screw' || hle.t === 'selft'){
+      cls.appendChild(g('circle',{cx:pos.x,cy:pos.y,r:r*0.85,fill:st.fill,stroke:st.stroke,'stroke-width':1.2}))
+      cls.appendChild(g('line',{x1:pos.x-r*0.55,y1:pos.y,x2:pos.x+r*0.55,y2:pos.y,stroke:st.stroke,'stroke-width':0.9}))
+      cls.appendChild(g('line',{x1:pos.x,y1:pos.y-r*0.55,x2:pos.x,y2:pos.y+r*0.55,stroke:st.stroke,'stroke-width':0.9}))
+    }else if(hle.t === 'bolt'){
+      cls.appendChild(g('circle',{cx:pos.x,cy:pos.y,r,fill:st.fill}))
+      cls.appendChild(g('line',{x1:pos.x-r*0.6,y1:pos.y,x2:pos.x+r*0.6,y2:pos.y,stroke:'#fff','stroke-width':1}))
+      cls.appendChild(g('line',{x1:pos.x,y1:pos.y-r*0.6,x2:pos.x,y2:pos.y+r*0.6,stroke:'#fff','stroke-width':1}))
+    }else if(hle.t === 'dowel'){
+      cls.appendChild(g('circle',{cx:pos.x,cy:pos.y,r,fill:st.fill}))
+      cls.appendChild(g('circle',{cx:pos.x,cy:pos.y,r:r*0.3,fill:'#fff'}))
+    }else{
+      cls.appendChild(g('circle',{cx:pos.x,cy:pos.y,r:r*0.8,fill:st.fill}))
+    }
+    // номер
+    const lb = g('text',{x:pos.x + r*1.2 + 3, y:pos.y - r*0.8 - 2,'font-size':7,'font-weight':800,fill:'#0f172a'})
+    lb.textContent = num
+    cls.appendChild(lb)
+    svg.appendChild(cls)
+  })
+
+  // ---- размеры ----
+  const dim = (x1,y1,x2,y2,txt,off,vertical=false)=>{
+    svg.appendChild(g('line',{x1,y1,x2,y2,stroke:'#1e3a2f','stroke-width':0.8}))
+    const o = off
+    if(!vertical){
+      svg.appendChild(g('line',{x1,y1:y1-3,x2:x1,y2:y1+3,stroke:'#1e3a2f','stroke-width':0.8}))
+      svg.appendChild(g('line',{x1:x2,y1:y1-3,x2:x2,y2:y1+3,stroke:'#1e3a2f','stroke-width':0.8}))
+      const t=g('text',{x:(x1+x2)/2,y:y1+o,'text-anchor':'middle','font-size':8,'font-family':'JetBrains Mono, monospace','font-weight':700,fill:'#1e3a2f'})
+      t.textContent = txt
+      svg.appendChild(t)
+    }else{
+      svg.appendChild(g('line',{x1:x1-3,y1,x2:x1+3,y2:y1,stroke:'#1e3a2f','stroke-width':0.8}))
+      svg.appendChild(g('line',{x1:x2-3,y1:y2,x2:x2+3,y2,stroke:'#1e3a2f','stroke-width':0.8}))
+      const t=g('text',{x:x1+o,y:(y1+y2)/2,'text-anchor':'middle','font-size':8,'font-family':'JetBrains Mono, monospace','font-weight':700,fill:'#1e3a2f',transform:`rotate(90 ${x1+o} ${(y1+y2)/2})`})
+      t.textContent = txt
+      svg.appendChild(t)
+    }
+  }
+  dim(x0, y0 + hS + tS + 12, x0 + wS, y0 + hS + tS + 12, `${Math.round(PW)} мм`, 10)
+  dim(x0 + wS + tS + 12, y0, x0 + wS + tS + 12, y0 + hS, `${Math.round(PH)} мм`, 10, true)
+
+  // ---- сечение профиля (металл) ----
+  if(isMetal){
+    const sec = (item.section || '40×20').split('×').map(Number)
+    const a = sec[0] || 40, b = sec[1] || 20, wall = item.thick
+    const ds = 40 / Math.max(a, b)
+    const dx = vbW - 66, dy = 12
+    svg.appendChild(g('rect',{x:dx,y:dy,width:a*ds,height:b*ds,fill:'#dbe2ea',stroke:'#475569','stroke-width':1.2}))
+    svg.appendChild(g('rect',{x:dx+wall*ds,y:dy+wall*ds,width:(a-2*wall)*ds,height:(b-2*wall)*ds,fill:'#fff',stroke:'#475569','stroke-width':0.8}))
+    const t1=g('text',{x:dx+a*ds/2,y:dy+b*ds+10,'text-anchor':'middle','font-size':7.5,'font-family':'JetBrains Mono, monospace','font-weight':700,fill:'#1e3a2f'})
+    t1.textContent = `сечение ${a}×${b}×${wall}`
+    svg.appendChild(t1)
+  }else{
+    // бейдж толщины
+    const bw2 = 52
+    svg.appendChild(g('rect',{x:vbW-bw2-8,y:10,width:bw2,height:16,rx:8,fill:'#1e3a2f'}))
+    const tb=g('text',{x:vbW-bw2/2-8,y:21,'text-anchor':'middle','font-size':8,'font-weight':800,fill:'#f2c14e'})
+    tb.textContent = `${T} мм`
+    svg.appendChild(tb)
+  }
+
+  // подпись грани
+  const cap = g('text',{x:10,y:14,'font-size':8,'font-weight':800,fill:'#64748b','letter-spacing':'0.08em'})
+  cap.textContent = isMetal ? 'РАЗВЁРТКА ПРОФИЛЯ • ФАСКА' : 'РАЗВЁРТКА ДЕТАЛИ • ГРАНЬ + ТОРЦЫ'
+  svg.appendChild(cap)
+
+  // ---- узел стыковки (деталь разрезана под лист) ----
+  const si = item.part && item.part.splitInfo
+  if(si){
+    const red = '#ef4444'
+    const jc = `СТЫК: сегмент ${si.index + 1} из ${si.total} • цельная ${si.origW}×${si.origH} • шканты + саморез`
+    let ln, tx, ty, anchor = 'middle'
+    if(si.longAxis === 'h'){
+      const yEdge = si.index > 0 ? y0 + hS : y0
+      ln = { x1: x0 - 8, y1: yEdge, x2: x0 + wS + 8, y2: yEdge }
+      tx = x0 + wS / 2
+      ty = si.index > 0 ? y0 + hS + tS + 26 : y0 - tS - 8
+    } else {
+      const xEdge = si.index > 0 ? x0 : x0 + wS
+      ln = { x1: xEdge, y1: y0 - 8, x2: xEdge, y2: y0 + hS + 8 }
+      tx = x0 + 4; ty = y0 + hS + tS + 26; anchor = 'start'
+    }
+    svg.appendChild(g('line', { ...ln, stroke: red, 'stroke-width': 2, 'stroke-dasharray': '7 4' }))
+    const jt = g('text', { x: tx, y: ty, 'text-anchor': anchor, 'font-size': 7.5, 'font-weight': 800, fill: red })
+    jt.textContent = jc
+    svg.appendChild(jt)
+  }
+
+  container.appendChild(svg)
+}
+
+// ==================== Мини-3D: позиция детали в изделии ====================
+export function drawMiniPos(container, item, model, params){
+  const svgNS='http://www.w3.org/2000/svg'
+  const svg=document.createElementNS(svgNS,'svg')
+  const g=(tag,a={})=>{const e=document.createElementNS(svgNS,tag);for(const k in a)e.setAttribute(k,a[k]);return e}
+  const W=params.W, H=params.H, D=params.D
+  svg.setAttribute('viewBox','0 0 340 260')
+  svg.style.width='100%'
+  svg.style.height='auto'
+  svg.style.background='#fafaf9'
+
+  const cos30 = Math.cos(30*Math.PI/180), sin30 = Math.sin(30*Math.PI/180)
+  const scale = Math.min(160 / W, 150 / H, 160 / D) * 0.85
+  const cx=170, cy=185
+  function iso(x,y,z){
+    return { X: cx + (x - z)*cos30*scale, Y: cy + (x + z)*sin30*scale - y*scale }
+  }
+  function face(pts, fill, stroke, sw=1, opacity=1){
+    const d = pts.map((p,i)=> `${i===0?'M':'L'} ${p.X} ${p.Y}`).join(' ') + ' Z'
+    svg.appendChild(g('path',{d,fill,stroke,'stroke-width':sw,opacity}))
+  }
+
+  const all = [...(model.ghosts||[]), ...model.items]
+  const sorted = all.slice().sort((a,b)=>{
+    const za = a.z + a.d/2, zb = b.z + b.d/2
+    if(Math.abs(za-zb) > 1) return zb - za
+    if(Math.abs((a.x+a.w/2)-(b.x+b.w/2)) > 1) return (a.x+a.w/2) - (b.x+b.w/2)
+    return (a.y+a.h/2) - (b.y+b.h/2)
+  })
+
+  sorted.forEach(it=>{
+    const isSel = it === item || it.key === item.key
+    const c = isoBoxCorners(iso, it.x, it.y, it.z, it.x+it.w, it.y+it.h, it.z+it.d)
+    let topF, rightF, frontF, strokeC, op
+    if(isSel){
+      topF='#f2c14e'; rightF='#e0a93a'; frontF='#f7d489'; strokeC='#7c4a03'; op=1
+    }else if(it.metal){
+      topF='#dbe2ea'; rightF='#9fb0bf'; frontF='#c3ced9'; strokeC='#64748b'; op=0.5
+    }else if(it.part && it.part.material && it.part.material.includes('ДВП')){
+      topF='#e2e8f0'; rightF='#cbd5e1'; frontF='#e8edf2'; strokeC='#94a3b8'; op=0.5
+    }else if(it.ghost){
+      topF='#e5e7eb'; rightF='#d1d5db'; frontF='#e5e7eb'; strokeC='#9ca3af'; op=0.55
+    }else{
+      topF='#eef2ee'; rightF='#d8ded9'; frontF='#e9ede9'; strokeC='#94a3b8'; op=0.5
+    }
+    face(c.front, frontF, strokeC, isSel?1.6:0.7, op)
+    face(c.right, rightF, strokeC, isSel?1.6:0.7, op)
+    face(c.top,   topF,   strokeC, isSel?1.6:0.7, op)
+    if(isSel){
+      const mid = iso(it.x + it.w/2, it.y + it.h, it.z + it.d/2)
+      const bw2 = Math.min(300, it.name.length * 6.4 + 16)
+      svg.appendChild(g('rect',{x:170-bw2/2,y:8,width:bw2,height:18,rx:9,fill:'#1e3a2f',opacity:0.95}))
+      const tx=g('text',{x:170,y:20,'text-anchor':'middle','font-size':9.5,'font-weight':800,fill:'#f2c14e'})
+      tx.textContent = it.name.length > 34 ? it.name.slice(0,33)+'…' : it.name
+      svg.appendChild(tx)
+      svg.appendChild(g('line',{x1:mid.X,y1:mid.Y,x2:mid.X,y2:26,stroke:'#b45309','stroke-width':1,'stroke-dasharray':'3 2'}))
+    }
+  })
+
+  const dt=g('text',{x:10,y:250,'font-size':9,'font-family':'JetBrains Mono, monospace',fill:'#64748b'})
+  dt.textContent = `${W} × ${H} × ${D} мм — позиция детали в сборке`
+  svg.appendChild(dt)
 
   container.appendChild(svg)
 }

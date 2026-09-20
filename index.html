@@ -6,7 +6,8 @@
     <meta name="theme-color" content="#1e3a2f" />
     <title>Construction — Конструктор раскроя</title>
     <link rel="manifest" href="manifest.json" />
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%231e3a2f'/><path d='M20 70 L20 20 L50 20 L80 35 L80 70 Z' fill='none' stroke='%23f2c14e' stroke-width='6' stroke-linejoin='round'/><path d='M20 35 L50 35 L50 70' stroke='%23f2c14e' stroke-width='3' opacity='0.7'/><path d='M50 20 L50 35 L80 35' stroke='%23f2c14e' stroke-width='3' opacity='0.7'/></svg>" />
+    <link rel="apple-touch-icon" href="icons/icon-192.png" />
+    <link rel="icon" href="icons/icon-192.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
   </head>
@@ -20,15 +21,23 @@
           </div>
           <div>
             <div class="header-title">CONSTRUCTION</div>
-            <div class="header-sub">Конструктор мебели • PRO100</div>
+            <div class="header-sub">Конструктор мебели • Imaster</div>
           </div>
         </div>
         <div class="header-right">
           <span class="badge">v1.0 • APK • Offline</span>
+          <button id="btnFontMinus" class="btn btn-ghost font-btn" title="Уменьшить шрифт">A−</button>
+          <button id="btnFontPlus" class="btn btn-ghost font-btn" title="Увеличить шрифт">A+</button>
+          <button id="btnHelp" class="btn btn-ghost" title="Справка и инструкция">❓</button>
           <button id="btnSave" class="btn btn-ghost" title="Сохранить проект">💾</button>
           <button id="btnPrint" class="btn btn-ghost" title="Печать">🖨️</button>
         </div>
       </header>
+    <!-- Mobile: переключатель «Параметры / Результат» (видим при ширине ≤980px) -->
+    <div class="view-switch" id="viewSwitch">
+      <button type="button" data-view="params">⚙️ Параметры</button>
+      <button type="button" data-view="result" class="active">📊 Результат</button>
+    </div>
 
       <div class="layout">
         <!-- LEFT PANEL - CONTROLS -->
@@ -63,6 +72,11 @@
                   <span class="type-name">Полка</span>
                   <span class="type-desc">настенная</span>
                 </button>
+                <button class="type-card" data-type="metal">
+                  <span class="type-icon">🏗️</span>
+                  <span class="type-name">Металл</span>
+                  <span class="type-desc">рама из профиля</span>
+                </button>
               </div>
             </section>
 
@@ -96,7 +110,7 @@
             </section>
 
             <!-- Material -->
-            <section class="section">
+            <section class="section" id="materialSection">
               <div class="section-label">МАТЕРИАЛ КОРПУСА</div>
               <div class="grid2">
                 <label class="field">
@@ -124,9 +138,9 @@
                 <label class="field">
                   <span>Лист Ш × В, мм</span>
                   <div class="inline-inputs">
-                    <input type="number" id="inpSheetW" value="2800" min="1000" max="3500" step="10">
+                    <input type="number" id="inpSheetW" value="2800" min="100" max="3500" step="10">
                     <span>×</span>
-                    <input type="number" id="inpSheetH" value="2070" min="1000" max="3500" step="10">
+                    <input type="number" id="inpSheetH" value="2070" min="100" max="3500" step="10">
                   </div>
                 </label>
                 <label class="field">
@@ -146,12 +160,77 @@
                 <button data-mat="mdf16" data-sheet="2800x2070" data-t="16">МДФ</button>
                 <button data-mat="dsp22" data-sheet="2440x1830" data-t="22">ДСП 22</button>
               </div>
-              <label class="check"><input type="checkbox" id="chkRear" checked> <span>Задняя стенка ДВП 3.2 мм (в паз / накладная)</span></label>
-              <label class="check"><input type="checkbox" id="chkBase"> <span>Цоколь 80 мм (планка снизу)</span></label>
+              <div class="custom-mat">
+                <div class="custom-mat-title">Мой материал (свой размер листа)</div>
+                <div class="grid2">
+                  <label class="field">
+                    <span>Название</span>
+                    <input type="text" id="inpMatName" placeholder="ЛДСП 8, Липа…" maxlength="24">
+                  </label>
+                  <label class="field">
+                    <span>Цена $/м²</span>
+                    <input type="number" id="inpMatPrice" value="30" min="1" max="999" step="1">
+                  </label>
+                </div>
+                <button class="btn btn-small" id="btnAddMat" type="button">＋ Добавить (толщина и лист — из полей выше)</button>
+                <div class="custom-mat-list" id="customMatList"></div>
+              </div>
+              <label class="check" id="chkRearRow"><input type="checkbox" id="chkRear" checked> <span>Задняя стенка ДВП 3.2 мм (в паз / накладная)</span></label>
+              <label class="check" id="chkBaseRow"><input type="checkbox" id="chkBase"> <span>Цоколь 80 мм (планка снизу)</span></label>
+            </section>
+
+            <!-- Metal frame options -->
+            <section class="section" id="metalSection" style="display:none">
+              <div class="section-label">🏗️ МЕТАЛЛИЧЕСКАЯ РАМА ИЗ ПРОФИЛЯ</div>
+              <div class="grid2">
+                <label class="field">
+                  <span>Сечение профиля</span>
+                  <select id="selMetalProfile">
+                    <option value="20x20">20×20 мм</option>
+                    <option value="30x30">30×30 мм</option>
+                    <option value="40x20" selected>40×20 мм</option>
+                    <option value="40x40">40×40 мм</option>
+                    <option value="50x25">50×25 мм</option>
+                    <option value="60x30">60×30 мм</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Стенка, мм</span>
+                  <select id="selMetalWall">
+                    <option value="1.5">1.5</option>
+                    <option value="2" selected>2</option>
+                    <option value="2.5">2.5</option>
+                    <option value="3">3</option>
+                  </select>
+                </label>
+              </div>
+              <div class="stepper-grid" style="margin-top:10px">
+                <label class="stepper">
+                  <span>Уровней рам (полок)</span>
+                  <div class="stepper-ctrl">
+                    <button data-action="dec" data-target="levels">−</button>
+                    <input type="number" id="inpMetalLevels" value="3" min="2" max="6" readonly>
+                    <button data-action="inc" data-target="levels">+</button>
+                  </div>
+                </label>
+                <label class="stepper">
+                  <span>Верт. перегородок</span>
+                  <div class="stepper-ctrl">
+                    <button data-action="dec" data-target="dividers">−</button>
+                    <input type="number" id="inpMetalDividers" value="0" min="0" max="4" readonly>
+                    <button data-action="inc" data-target="dividers">+</button>
+                  </div>
+                </label>
+              </div>
+              <div class="check-group" style="margin-top:10px">
+                <label class="check"><input type="checkbox" id="chkMetalShelves" checked> <span>Листовые полки на рамах (ЛДСП/фанера)</span></label>
+                <label class="check"><input type="checkbox" id="chkMetalRear"> <span>Задняя стенка ДВП</span></label>
+              </div>
+              <div class="hint" style="margin-top:10px">Основная конструкция — <b>металлический каркас из прямоугольного профиля</b>. Крепление — болты M6 (Ø6.6) и угольники. Раскрой профиля и смета считаются отдельно.</div>
             </section>
 
             <!-- Construction -->
-            <section class="section">
+            <section class="section" id="constrSection">
               <div class="section-label">КОНСТРУКЦИЯ И НАПОЛНЕНИЕ</div>
               <div class="grid2">
                 <label class="field">
@@ -216,6 +295,32 @@
               <div class="check-group" id="extraOptions">
                 <!-- dynamic options per type -->
               </div>
+              <div class="frame-block">
+                <label class="check"><input type="checkbox" id="chkMetalFrame"> <span>🏗️ Металлический каркас (профтруба)</span></label>
+                <div id="frameProfileRow" style="display:none" class="grid2" >
+                  <label class="field">
+                    <span>Сечение профтрубы</span>
+                    <select id="selFrameProfile">
+                      <option value="20x20">20×20 мм</option>
+                      <option value="30x30">30×30 мм</option>
+                      <option value="40x20" selected>40×20 мм</option>
+                      <option value="40x40">40×40 мм</option>
+                      <option value="50x25">50×25 мм</option>
+                      <option value="60x30">60×30 мм</option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span>Стенка, мм</span>
+                    <select id="selFrameWall">
+                      <option value="1.5">1.5</option>
+                      <option value="2" selected>2</option>
+                      <option value="2.5">2.5</option>
+                      <option value="3">3</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="hint" id="frameHint" style="display:none">4 стойки по углам + нижние рамы (фронт/бэк). Корпус крепится к стойкам болтами M6 (отметка отверстий — в карточке боковины).</div>
+              </div>
             </section>
 
             <section class="section section-action">
@@ -235,19 +340,21 @@
             <button class="tab active" data-tab="assembly">Сборка <span class="tab-badge">3D</span></button>
             <button class="tab" data-tab="projections">Чертежи <span class="tab-badge">4 вида</span></button>
             <button class="tab" data-tab="parts">Детали <span class="tab-badge" id="tabPartsCount">—</span></button>
+            <button class="tab" data-tab="fasteners">Крепёж <span class="tab-badge">🔩</span></button>
             <button class="tab" data-tab="cutting">Раскрой <span class="tab-badge" id="tabSheetsCount">—</span></button>
-            <button class="tab" data-tab="estimate">Смекта</button>
+            <button class="tab" data-tab="estimate">Смета</button>
           </div>
 
           <div class="main-content">
             <!-- ASSEMBLY TAB -->
-            <div class="tab-panel active" id="panel-assembly">
+            <div class="tab-panel active" id="panel-assembly" data-title="1. Изделие в сборе">
               <div class="canvas-toolbar">
                 <div class="toolbar-left">
                   <span class="view-label">Эскиз изделия в сборе</span>
                   <span class="view-dims" id="viewDims">800 × 2000 × 520</span>
                 </div>
                 <div class="toolbar-right">
+                  <button class="btn btn-small" id="btnFasteners" title="Показать отверстия под крепёж на гранях">🔩 Отверстия</button>
                   <button class="btn btn-small" id="btnRotate" title="Повернуть">⟲ Поворот</button>
                   <button class="btn btn-small" id="btnExplode" title="Разнести">✧ В разнос</button>
                   <select id="selView" class="select-small">
@@ -260,18 +367,20 @@
               <div class="canvas-wrap" id="assemblyCanvas">
                 <!-- SVG injected -->
               </div>
+              <div id="assemblyInfo"></div>
               <div class="canvas-legend" id="assemblyLegend"></div>
+              <div class="asm-hint">Кликните по детали — её позиция • повторный клик — карточка с развёрткой • тап по пустому месту — <b>полный экран</b> (щипок / двойной тап — зум)</div>
             </div>
 
             <!-- PROJECTIONS TAB -->
-            <div class="tab-panel" id="panel-projections">
+            <div class="tab-panel" id="panel-projections" data-title="2. Чертежи — 4 вида">
               <div class="projections-grid" id="projectionsGrid">
                 <!-- 4 SVGs -->
               </div>
             </div>
 
             <!-- PARTS TAB -->
-            <div class="tab-panel" id="panel-parts">
+            <div class="tab-panel" id="panel-parts" data-title="3. Детали — спецификация">
               <div class="parts-toolbar">
                 <div class="parts-stats" id="partsStats"></div>
                 <div class="parts-actions">
@@ -280,17 +389,23 @@
                   <button class="btn btn-small" id="btnCopyList">⎘ Копировать</button>
                 </div>
               </div>
+              <div class="parts-hint" id="partsHint"></div>
               <div class="table-wrap">
                 <table class="parts-table" id="partsTable">
-                  <thead><tr><th>№</th><th>Деталь</th><th>Материал</th><th>Размер (Ш×В)</th><th>Толщ.</th><th>Кол-во</th><th>Кромка</th><th>Площадь</th></tr></thead>
+                  <thead><tr><th>№</th><th>Деталь</th><th>Материал</th><th>Размер (Ш×В)</th><th>Толщ.</th><th>Кол-во</th><th>Кромка</th><th>Площадь</th><th>⚖️ Нагрузка</th><th>🕳 Разметка</th><th>📋</th></tr></thead>
                   <tbody></tbody>
                 </table>
               </div>
               <div class="parts-sketches" id="partsSketches"></div>
             </div>
 
+            <!-- FASTENERS TAB -->
+            <div class="tab-panel" id="panel-fasteners" data-title="4. Крепёж и соединения">
+              <div id="jointsPanel"></div>
+            </div>
+
             <!-- CUTTING TAB -->
-            <div class="tab-panel" id="panel-cutting">
+            <div class="tab-panel" id="panel-cutting" data-title="5. Раскрой листов">
               <div class="cutting-summary" id="cuttingSummary"></div>
               <div class="sheets-container" id="sheetsContainer"></div>
               <div class="cutting-tips">
@@ -300,21 +415,102 @@
             </div>
 
             <!-- ESTIMATE TAB -->
-            <div class="tab-panel" id="panel-estimate">
+            <div class="tab-panel" id="panel-estimate" data-title="6. Смета">
               <div class="estimate-grid" id="estimateGrid"></div>
             </div>
           </div>
         </main>
       </div>
 
-      <!-- MOBILE BOTTOM NAV -->
-      <nav class="mobile-nav">
-        <button class="mnav-btn active" data-tab="assembly">🏠 Сборка</button>
-        <button class="mnav-btn" data-tab="projections">📐 Чертёж</button>
-        <button class="mnav-btn" data-tab="parts">📋 Детали</button>
-        <button class="mnav-btn" data-tab="cutting">✂ Раскрой</button>
-      </nav>
+    <!-- MOBILE BOTTOM NAV -->
+    <nav class="mobile-nav">
+      <button class="mnav-btn active" data-tab="assembly">🏠 Сборка</button>
+      <button class="mnav-btn" data-tab="projections">📐 Чертёж</button>
+      <button class="mnav-btn" data-tab="parts">📋 Детали</button>
+      <button class="mnav-btn" data-tab="fasteners">🔩 Крепёж</button>
+      <button class="mnav-btn" data-tab="cutting">✂ Раскрой</button>
+    </nav>
+  </div>
+
+  <!-- МОДАЛКА ДЕТАЛИ: позиция + развёртка + крепёж -->
+  <div id="partModal" class="pm-overlay">
+    <div class="pm-card">
+      <div id="partModalBody"></div>
     </div>
+    <div class="pm-footer">
+      <button class="btn btn-primary pm-footer-btn" id="pmLocate">📍 Показать в сборке</button>
+      <button class="btn btn-ghost pm-footer-btn" id="pmClose" style="background:rgba(255,255,255,.12);color:#fff">Закрыть</button>
+    </div>
+  </div>
+
+  <!-- СПРАВКА: пошаговая инструкция + контакты разработчика -->
+  <div id="helpModal" class="pm-overlay">
+    <div class="pm-card help-card">
+      <div class="help-head">
+        <div>
+          <div class="help-title">❓ Справка — как работать в программе</div>
+          <div class="help-sub">Конструктор мебели Imaster • раскрой, крепёж, смета</div>
+          <div class="help-actions">
+            <button class="btn btn-small help-upd-btn" id="btnCheckUpdate" type="button">🔄 Проверить обновление</button>
+          </div>
+        </div>
+        <button class="btn btn-ghost" id="helpClose" style="color:#fff;background:rgba(255,255,255,.12)">✕</button>
+      </div>
+      <div class="help-body">
+
+        <div class="help-section">
+          <div class="help-h">Шаг 1. Выберите тип изделия</div>
+          <p>Нажмите карточку типа: <b>Шкаф</b> (с полками и дверями), <b>Тумба</b> (комод), <b>Стойка</b> (открытый стеллаж), <b>Стол</b> (письменный/обеденный), <b>Полка</b> (настенная) или <b>Металл</b> (рама целиком из профтрубы).</p>
+        </div>
+
+        <div class="help-section">
+          <div class="help-h">Шаг 2. Укажите габариты и материал</div>
+          <p>Введите <b>высоту H, ширину W, глубину D</b> в миллиметрах (кнопки ± и ползунки). Выберите <b>материал</b> (ЛДСП, МДФ, фанера, ОСП, ДСП) и <b>толщину</b> — размер листа подставится автоматически, его можно поменять. Нужен нестандартный лист? Впишите <b>«Мой материал»</b> — своё название, толщину, размер листа и цену, кнопка «＋ Добавить».</p>
+          <p class="help-note">Отметьте <b>«Задняя стенка ДВП»</b> и <b>«Цоколь»</b> при необходимости.</p>
+        </div>
+
+        <div class="help-section">
+          <div class="help-h">Шаг 3. Наполнение и конструкция</div>
+          <p>Слева настройте: <b>сборку корпуса</b> (вкладная / накладная), количество <b>полок, дверей, ящиков, перегородок</b>, зазор фасада и отступ полки от фасада. Для стола — тип опор (боковины ЛДСП или металл). Для полки — «простая доска» или «короб».</p>
+          <p>Для корпуса можно добавить <b>🏗️ металлический каркас из профтрубы</b> (чекбокс): 4 стойки по углам + нижние рамы, выбор сечения. Корпус крепится к стойкам болтами M6 — разметка отверстий появится в карточках деталей.</p>
+        </div>
+
+        <div class="help-section">
+          <div class="help-h">Шаг 4. Результат — 6 вкладок</div>
+          <div class="help-grid">
+            <div class="help-item"><b>🏠 Сборка (3D)</b><br>Эскиз изделия. <b>⟲ Поворот</b> — поворот на 90°, <b>✧ В разнос</b> — разобрать по деталям, <b>🔩 Отверстия</b> — точки сверления на гранях. Клик по детали — её позиция, повторный клик — <b>карточка детали</b>. Тап по пустому месту — <b>полный экран</b> (щипок и двойной тап — зум).</div>
+            <div class="help-item"><b>📐 Чертежи</b><br>Четыре вида: фасад, сбоку, сверху и изометрия — для передачи в мастерскую.</div>
+            <div class="help-item"><b>📋 Детали</b><br>Спецификация всех деталей. Колонка <b>⚖️ Нагрузка</b> — максимальная нагрузка на полку (рассчитана по толщине, пролёту, глубине и материалу). Колонка <b>🕳 Разметка</b> — количество отверстий, клик — сразу карточка с нумерованной разметкой. Иконка <b>📋</b> — карточка: <b>позиция в изделии</b>, <b>развёртка (раскрой) с разметкой отверстий</b> и крепёж.</div>
+            <div class="help-item"><b>🔩 Крепёж</b><br>Все соединения конструкции: какие детали крепятся к каким, чем и в каком количестве. Клик по строке — карточка детали с координатами отверстий.</div>
+            <div class="help-item"><b>✂️ Раскрой</b><br>Нестинг деталей по листам с эффективностью заполнения, плюс отдельный раскрой металлического профиля (метраж, вес, цена).</div>
+            <div class="help-item"><b>💰 Смета</b><br>Материалы, фурнитура, раскрой и обработка, итоговая стоимость.</div>
+          </div>
+        </div>
+
+        <div class="help-section">
+          <div class="help-h">Шаг 5. Экспорт и печать</div>
+          <p><b>🖨️ Печать</b> (кнопка в шапке или «Печать сметы и чертежей» в смете) — полный PDF: все вкладки подряд на белом фоне — сборка, чертежи, детали, крепёж, раскрой, смета. <b>⬇ CSV</b> — список деталей для ЧПУ/раскроя. <b>⎘ Копировать</b> — список в буфер обмена (можно прислать в мессенджер). <b>💾</b> — сохранить проект в браузере.</p>
+        </div>
+
+        <div class="help-section">
+          <div class="help-h">Мобильная версия (APK)</div>
+          <p>Кнопка <b>«Параметры / Результат»</b> переключает экраны на узком экране. Системная кнопка «назад» сначала закрывает полноэкранный зум и карточку детали, а затем — приложение. <b>Автообновление:</b> при запуске приложение проверяет GitHub Releases — если вышла новая версия, появится диалог «Обновить» (нужно однократно разрешить «установку из неизвестных источников»).</p>
+        </div>
+
+        <div class="help-section help-dev">
+          <div class="help-h">Разработчик</div>
+          <div class="dev-card">
+            <div class="dev-name">Zakharevich Igor (Захаревич Игар)</div>
+            <div class="dev-row">📞 <a href="tel:+375293371412">+375 29 337-14-12</a></div>
+            <div class="dev-row">✉️ <a href="mailto:ziv@csl.by">ziv@csl.by</a></div>
+            <div class="dev-row">🌐 <a href="https://github.com/zigorminsk-debug/construction" target="_blank" rel="noopener">github.com/zigorminsk-debug/construction</a></div>
+          </div>
+          <p class="help-note">Вопросы, предложения и нестандартные задачи — пишите, отвечаю в мессенджерах (Telegram / Viber / WhatsApp).</p>
+        </div>
+
+      </div>
+    </div>
+  </div>
 
     <div id="toast" class="toast"></div>
     <script type="module" src="/src/main.js"></script>

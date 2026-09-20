@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- 1 · «Шкаф» — базовый фирменный (тот же мотив, что в закладке браузера) -->
+  <g id="art" fill="none" stroke="#f2c14e" stroke-width="31" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M102.4 358.4 L102.4 102.4 L256 102.4 L409.6 179.2 L409.6 358.4 Z"/>
+    <path d="M102.4 179.2 L256 179.2 L256 358.4"/>
+    <path d="M256 102.4 L256 179.2 L409.6 179.2" stroke-width="24"/>
+  </g>
+</svg>

@@ -6,10 +6,37 @@
 const KERF = 3 // пропил
 
 export function packParts(parts, sheetW, sheetH){
+  // Металл (профиль) не идёт в раскрой листа — отдельно
+  const metalParts = parts.filter(p=> p.kind === 'metal')
   // Фильтруем только основной материал (толщина >=8 и не ДВП)
-  const mainParts = parts.filter(p=> p.thickness >= 8 && !p.material.includes('ДВП') )
+  const mainParts = parts.filter(p=> p.thickness >= 8 && !p.material.includes('ДВП') && p.kind !== 'metal')
   // ДВП отдельно
-  const dvpParts = parts.filter(p=> p.material.includes('ДВП') || p.thickness < 5)
+  const dvpParts = parts.filter(p=> (p.material.includes('ДВП') || p.thickness < 5) && p.kind !== 'metal')
+
+  // Сводный список раскроя профиля: группировка по сечению и длине
+  const mGroup = new Map()
+  metalParts.forEach(p=>{
+    const key = `${p.section}|${p.w}`
+    if(!mGroup.has(key)){
+      mGroup.set(key, { section: p.section, wall: p.thickness, kgm: p.kgm || 0, priceM: p.priceM || 0, items: [] })
+    }
+    const g = mGroup.get(key)
+    g.items.push({ name: p.name, len: p.w, count: p.count })
+    g.total = (g.total || 0) + p.count
+  })
+  const metalCut = [...mGroup.values()].map(g=>{
+    const meters = g.items.reduce((s, it)=> s + it.len * it.count / 1000, 0)
+    const weight = meters * g.kgm
+    return { ...g, meters: +meters.toFixed(2), weight: +weight.toFixed(1) }
+  }).sort((a,b)=> b.meters - a.meters)
+  const metalTotals = metalCut.reduce((acc, g)=> {
+    acc.meters += g.meters
+    acc.weight += g.weight
+    acc.count += g.total
+    return acc
+  }, { meters: 0, weight: 0, count: 0 })
+  metalTotals.meters = +metalTotals.meters.toFixed(2)
+  metalTotals.weight = +metalTotals.weight.toFixed(1)
 
   // разворачиваем count в отдельные экземпляры
   const expand = (list) => {
@@ -36,7 +63,7 @@ export function packParts(parts, sheetW, sheetH){
   // для ДВП используем тот же размер листа по умолчанию 2800x2070 или 2500x1250 — но можем взять исходный
   // если ДВП - берём лист 2800x2070 тоже (или 2500*1250), оставим как есть
 
-  return { sheetsMain, sheetsDvp, totalSheets: sheetsMain.length + sheetsDvp.length }
+  return { sheetsMain, sheetsDvp, totalSheets: sheetsMain.length + sheetsDvp.length, metalCut, metalTotals, hasMetal: metalParts.length > 0 }
 }
 
 function packList(items, sheetW, sheetH, groupLabel, isDvp=false){
