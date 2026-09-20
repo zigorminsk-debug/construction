@@ -176,14 +176,17 @@ let html = readFileSync(htmlPath, 'utf8');
 const faviconHref = variant.isRaster
   ? 'icons/icon-192.png'
   : 'data:image/svg+xml,' + encodeURIComponent(variant.any);
-html = html.replace(/<link rel="icon"[^>]*>/, `<link rel="icon" href="${faviconHref}" />`);
+// Целим строкой (а не regex-ом): в data-URI favicon'а есть собственные '>'
+const replaceLine = (tag, line) =>
+  html.split('\n').map(l => l.includes(tag) ? line : l).join('\n');
+html = replaceLine('rel="icon"', `    <link rel="icon" href="${faviconHref}" />`);
 if (!/rel="apple-touch-icon"/.test(html)) {
   html = html.replace(
     /(<link rel="manifest"[^>]*\/>)/,
     `$1\n    <link rel="apple-touch-icon" href="icons/icon-192.png" />`
   );
 } else {
-  html = html.replace(/<link rel="apple-touch-icon"[^>]*>/, '<link rel="apple-touch-icon" href="icons/icon-192.png" />');
+  html = replaceLine('rel="apple-touch-icon"', '    <link rel="apple-touch-icon" href="icons/icon-192.png" />');
 }
 writeFileSync(htmlPath, html);
 console.log('  index.html — favicon обновлён');

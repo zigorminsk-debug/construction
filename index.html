@@ -7,7 +7,7 @@
     <title>Construction — Конструктор раскроя</title>
     <link rel="manifest" href="manifest.json" />
     <link rel="apple-touch-icon" href="icons/icon-192.png" />
-    <link rel="icon" href="icons/icon-192.png" /><rect width='100' height='100' rx='20' fill='%231e3a2f'/><path d='M20 70 L20 20 L50 20 L80 35 L80 70 Z' fill='none' stroke='%23f2c14e' stroke-width='6' stroke-linejoin='round'/><path d='M20 35 L50 35 L50 70' stroke='%23f2c14e' stroke-width='3' opacity='0.7'/><path d='M50 20 L50 35 L80 35' stroke='%23f2c14e' stroke-width='3' opacity='0.7'/></svg>" />
+    <link rel="icon" href="icons/icon-192.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
   </head>
@@ -26,6 +26,7 @@
         </div>
         <div class="header-right">
           <span class="badge">v1.0 • APK • Offline</span>
+          <button id="btnHelp" class="btn btn-ghost" title="Справка и инструкция">❓</button>
           <button id="btnSave" class="btn btn-ghost" title="Сохранить проект">💾</button>
           <button id="btnPrint" class="btn btn-ghost" title="Печать">🖨️</button>
         </div>
@@ -437,6 +438,72 @@
     <div class="pm-footer">
       <button class="btn btn-primary pm-footer-btn" id="pmLocate">📍 Показать в сборке</button>
       <button class="btn btn-ghost pm-footer-btn" id="pmClose" style="background:rgba(255,255,255,.12);color:#fff">Закрыть</button>
+    </div>
+  </div>
+
+  <!-- СПРАВКА: пошаговая инструкция + контакты разработчика -->
+  <div id="helpModal" class="pm-overlay">
+    <div class="pm-card help-card">
+      <div class="help-head">
+        <div>
+          <div class="help-title">❓ Справка — как работать в программе</div>
+          <div class="help-sub">Конструктор мебели Imaster • раскрой, крепёж, смета</div>
+        </div>
+        <button class="btn btn-ghost" id="helpClose" style="color:#fff;background:rgba(255,255,255,.12)">✕</button>
+      </div>
+      <div class="help-body">
+
+        <div class="help-section">
+          <div class="help-h">Шаг 1. Выберите тип изделия</div>
+          <p>Нажмите карточку типа: <b>Шкаф</b> (с полками и дверями), <b>Тумба</b> (комод), <b>Стойка</b> (открытый стеллаж), <b>Стол</b> (письменный/обеденный), <b>Полка</b> (настенная) или <b>Металл</b> (рама целиком из профтрубы).</p>
+        </div>
+
+        <div class="help-section">
+          <div class="help-h">Шаг 2. Укажите габариты и материал</div>
+          <p>Введите <b>высоту H, ширину W, глубину D</b> в миллиметрах (кнопки ± и ползунки). Выберите <b>материал</b> (ЛДСП, МДФ, фанера, ОСП, ДСП) и <b>толщину</b> — размер листа подставится автоматически, его можно поменять. Нужен нестандартный лист? Впишите <b>«Мой материал»</b> — своё название, толщину, размер листа и цену, кнопка «＋ Добавить».</p>
+          <p class="help-note">Отметьте <b>«Задняя стенка ДВП»</b> и <b>«Цоколь»</b> при необходимости.</p>
+        </div>
+
+        <div class="help-section">
+          <div class="help-h">Шаг 3. Наполнение и конструкция</div>
+          <p>Слева настройте: <b>сборку корпуса</b> (вкладная / накладная), количество <b>полок, дверей, ящиков, перегородок</b>, зазор фасада и отступ полки от фасада. Для стола — тип опор (боковины ЛДСП или металл). Для полки — «простая доска» или «короб».</p>
+          <p>Для корпуса можно добавить <b>🏗️ металлический каркас из профтрубы</b> (чекбокс): 4 стойки по углам + нижние рамы, выбор сечения. Корпус крепится к стойкам болтами M6 — разметка отверстий появится в карточках деталей.</p>
+        </div>
+
+        <div class="help-section">
+          <div class="help-h">Шаг 4. Результат — 6 вкладок</div>
+          <div class="help-grid">
+            <div class="help-item"><b>🏠 Сборка (3D)</b><br>Эскиз изделия. <b>⟲ Поворот</b> — поворот на 90°, <b>✧ В разнос</b> — разобрать по деталям, <b>🔩 Отверстия</b> — точки сверления на гранях. Клик по детали — её позиция, повторный клик — <b>карточка детали</b>. Тап по пустому месту — <b>полный экран</b> (щипок и двойной тап — зум).</div>
+            <div class="help-item"><b>📐 Чертежи</b><br>Четыре вида: фасад, сбоку, сверху и изометрия — для передачи в мастерскую.</div>
+            <div class="help-item"><b>📋 Детали</b><br>Спецификация всех деталей: размер, материал, кромка, количество. Иконка <b>📋</b> — карточка: <b>позиция в изделии</b>, <b>развёртка (раскрой) с нумерованной разметкой отверстий</b> и крепёж. У полок — <b>⚖️ максимальная нагрузка</b> (по толщине, пролёту, глубине и материалу).</div>
+            <div class="help-item"><b>🔩 Крепёж</b><br>Все соединения конструкции: какие детали крепятся к каким, чем и в каком количестве. Клик по строке — карточка детали с координатами отверстий.</div>
+            <div class="help-item"><b>✂️ Раскрой</b><br>Нестинг деталей по листам с эффективностью заполнения, плюс отдельный раскрой металлического профиля (метраж, вес, цена).</div>
+            <div class="help-item"><b>💰 Смета</b><br>Материалы, фурнитура, раскрой и обработка, итоговая стоимость.</div>
+          </div>
+        </div>
+
+        <div class="help-section">
+          <div class="help-h">Шаг 5. Экспорт и печать</div>
+          <p><b>🖨️ Печать</b> (кнопка в шапке или «Печать сметы и чертежей» в смете) — полный PDF: все вкладки подряд на белом фоне — сборка, чертежи, детали, крепёж, раскрой, смета. <b>⬇ CSV</b> — список деталей для ЧПУ/раскроя. <b>⎘ Копировать</b> — список в буфер обмена (можно прислать в мессенджер). <b>💾</b> — сохранить проект в браузере.</p>
+        </div>
+
+        <div class="help-section">
+          <div class="help-h">Мобильная версия (APK)</div>
+          <p>Кнопка <b>«Параметры / Результат»</b> переключает экраны на узком экране. Системная кнопка «назад» сначала закрывает полноэкранный зум и карточку детали, а затем — приложение. <b>Автообновление:</b> при запуске приложение проверяет GitHub Releases — если вышла новая версия, появится диалог «Обновить» (нужно однократно разрешить «установку из неизвестных источников»).</p>
+        </div>
+
+        <div class="help-section help-dev">
+          <div class="help-h">Разработчик</div>
+          <div class="dev-card">
+            <div class="dev-name">Zakharevich Igor (Захаревич Игар)</div>
+            <div class="dev-row">📞 <a href="tel:+375293371412">+375 29 337-14-12</a></div>
+            <div class="dev-row">✉️ <a href="mailto:ziv@csl.by">ziv@csl.by</a></div>
+            <div class="dev-row">🌐 <a href="https://github.com/zigorminsk-debug/construction" target="_blank" rel="noopener">github.com/zigorminsk-debug/construction</a></div>
+          </div>
+          <p class="help-note">Вопросы, предложения и нестандартные задачи — пишите, отвечаю в мессенджерах (Telegram / Viber / WhatsApp).</p>
+        </div>
+
+      </div>
     </div>
   </div>
 

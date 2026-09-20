@@ -159,6 +159,12 @@ function bindUI(){
     if(e.target.id==='selPolkaType'){ state.polkaType=e.target.value; saveState(); recalc() }
   })
 
+  // справка
+  $('#btnHelp').addEventListener('click', openHelp)
+  $('#helpClose').addEventListener('click', closeHelp)
+  $('#helpModal').addEventListener('click', e=>{ if(e.target.id==='helpModal') closeHelp() })
+  document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeHelp() })
+
   $('#btnCalc').addEventListener('click', recalc)
   $('#btnRotate').addEventListener('click', ()=>{
     state.rotate = (state.rotate+1)%4
@@ -554,12 +560,14 @@ function makeZoomable(el, title){
 }
 
 // Android: системная кнопка «назад» сначала закрывает оверлеи
-// (полноэкранный зум, карточку детали), а не приложение
+// (полноэкранный зум, карточку детали, справку), а не приложение
 window.__onBackKey = ()=>{
   const z = document.getElementById('zoomOverlay')
   if(z && z.classList.contains('open')){ closeZoomViewer(); return 'handled' }
   const pm = document.getElementById('partModal')
   if(pm && pm.classList.contains('open')){ closePartCard(); return 'handled' }
+  const hm = document.getElementById('helpModal')
+  if(hm && hm.classList.contains('open')){ closeHelp(); return 'handled' }
   return 'none'
 }
 
@@ -649,6 +657,16 @@ function prefixOf(name){
 function closePartCard(){
   const modal = $('#partModal')
   if(modal) modal.classList.remove('open')
+}
+
+// ==================== Справка (пошаговая инструкция) ====================
+function openHelp(){
+  const m = $('#helpModal')
+  if(m){ m.classList.add('open'); m.scrollTop = 0 }
+}
+function closeHelp(){
+  const m = $('#helpModal')
+  if(m) m.classList.remove('open')
 }
 
 function onDimChange(){

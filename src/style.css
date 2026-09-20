@@ -338,3 +338,24 @@ input,select,button{font-family:inherit}
 .pm-split-note{margin-top:6px;font-size:12px;font-weight:600;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:6px 10px}
 /* бейдж максимальной нагрузки на полку */
 .load-badge{display:inline-block;font-weight:800;color:#1e3a2f;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:99px;padding:1px 8px;font-size:11px;white-space:nowrap}
+
+/* ===== Справка (пошаговая инструкция) ===== */
+.help-card{ max-width:820px }
+.help-head{ background:linear-gradient(135deg,#1e3a2f,#2a5a45);padding:18px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px }
+.help-title{ font-size:17px;font-weight:800;color:#fff }
+.help-sub{ font-size:12px;color:rgba(255,255,255,.65);margin-top:3px }
+.help-body{ padding:16px 20px 24px }
+.help-section{ padding:12px 0;border-bottom:1px solid #e7e5e4 }
+.help-section:last-child{ border-bottom:none }
+.help-h{ font-size:14px;font-weight:800;color:#1e3a2f;margin-bottom:6px }
+.help-section p{ font-size:13px;color:#334155;line-height:1.55;margin:4px 0 }
+.help-note{ font-size:12px !important;color:#64748b !important }
+.help-grid{ display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px }
+.help-item{ font-size:12px;color:#334155;line-height:1.5;background:#f6f3ec;border:1px solid #e7e5e4;border-radius:10px;padding:10px 12px }
+.help-item b{ color:#1e3a2f }
+.help-dev .dev-card{ background:#f6f3ec;border:1px solid #d6cfa8;border-radius:12px;padding:12px 14px;margin:8px 0 }
+.dev-name{ font-size:14px;font-weight:800;color:#1e3a2f;margin-bottom:6px }
+.dev-row{ font-size:13px;margin:3px 0 }
+.dev-row a{ color:#1e3a2f;font-weight:700;text-decoration:none;border-bottom:1px dashed #a16207 }
+.dev-row a:active{ color:#a16207 }
+@media (max-width:640px){ .help-grid{ grid-template-columns:1fr } }
