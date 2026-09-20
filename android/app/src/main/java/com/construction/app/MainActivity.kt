@@ -108,20 +108,44 @@ class MainActivity : AppCompatActivity() {
         return (info.versionCode to info.versionName)
     }
 
-    private fun checkForUpdate() {
-        if (updateOffered) return
+    /**
+     * Проверка новой версии. force=true — по кнопке «Проверить обновление»
+     * в справке (не считаемся с тем, что диалог уже показывали).
+     * Результат сообщается в JS: window.__updateCheckResult('latest:N' | 'update:N' | 'error')
+     */
+    private fun checkForUpdate(force: Boolean = false) {
+        if (updateOffered && !force) return
+        if (force) updateOffered = false
         Thread {
             try {
-                val latest = fetchLatestRelease() ?: return@Thread
+                val latest = fetchLatestRelease()
+                if (latest == null) {
+                    notifyJs("error")
+                    return@Thread
+                }
                 val (curCode, _) = currentVersion()
                 if (latest.code > curCode) {
                     updateOffered = true
+                    notifyJs("update:${latest.code}")
                     handler.post { showUpdateDialog(latest) }
+                } else {
+                    notifyJs("latest:${latest.code}")
                 }
             } catch (e: Exception) {
                 Log.w("UpdateCheck", "Проверка обновления не удалась", e)
+                notifyJs("error")
             }
         }.start()
+    }
+
+    private fun notifyJs(status: String) {
+        handler.post {
+            try {
+                webView.evaluateJavascript(
+                    "window.__updateCheckResult && window.__updateCheckResult('$status')", null
+                )
+            } catch (_: Exception) { /* WebView ещё не готов */ }
+        }
     }
 
     class RemoteRelease(val code: Int, val name: String, val apkUrl: String)
@@ -293,6 +317,12 @@ class MainActivity : AppCompatActivity() {
                     e.printStackTrace()
                 }
             }
+        }
+
+        /** Кнопка «🔄 Проверить обновление» в справке приложения. */
+        @JavascriptInterface
+        fun checkUpdate() {
+            checkForUpdate(force = true)
         }
     }
 

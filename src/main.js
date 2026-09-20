@@ -164,6 +164,7 @@ function bindUI(){
   $('#helpClose').addEventListener('click', closeHelp)
   $('#helpModal').addEventListener('click', e=>{ if(e.target.id==='helpModal') closeHelp() })
   document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeHelp() })
+  $('#btnCheckUpdate').addEventListener('click', checkUpdateFromHelp)
 
   $('#btnCalc').addEventListener('click', recalc)
   $('#btnRotate').addEventListener('click', ()=>{
@@ -667,6 +668,41 @@ function openHelp(){
 function closeHelp(){
   const m = $('#helpModal')
   if(m) m.classList.remove('open')
+}
+
+// ==================== Проверка обновления (кнопка в справке) ====================
+const UPDATE_REPO = 'zigorminsk-debug/construction'
+let updateChecking = false
+
+async function checkUpdateFromHelp(){
+  if(updateChecking) return
+  updateChecking = true
+  try{
+    // APK: нативная проверка (обратный результат — window.__updateCheckResult)
+    if(window.ConstructionAndroid && typeof window.ConstructionAndroid.checkUpdate === 'function'){
+      toast('Проверяю обновления…')
+      window.ConstructionAndroid.checkUpdate()
+      return
+    }
+    // Браузер: прямой запрос к GitHub Releases
+    toast('Проверяю обновления на GitHub…')
+    const r = await fetch(`https://api.github.com/repos/${UPDATE_REPO}/releases/latest`, { headers:{ 'User-Agent':'construction-app' } })
+    if(!r.ok) throw new Error('HTTP ' + r.status)
+    const j = await r.json()
+    const code = String(j.tag_name || '').split('.').pop()
+    toast(`Последняя версия на GitHub: 1.0.${code} • Скачайте APK с релиза, чтобы обновиться`)
+  }catch(e){
+    toast('Проверка не удалась — нет связи с GitHub?')
+  }finally{
+    updateChecking = false
+  }
+}
+
+// результат нативной проверки (из MainActivity)
+window.__updateCheckResult = (status)=>{
+  if(!status || status === 'error') toast('Проверка обновления не удалась — нет связи с GitHub?')
+  else if(status.startsWith('update')) toast(`Нашлась новая версия 1.0.${status.split(':')[1]} — диалог установки появится`)
+  else if(status.startsWith('latest')) toast(`У вас последняя версия (1.0.${status.split(':')[1]})`)
 }
 
 function onDimChange(){
