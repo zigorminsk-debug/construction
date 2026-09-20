@@ -34,8 +34,7 @@ jobs:
           echo "Checking Android SDK..."
           echo "ANDROID_HOME=$ANDROID_HOME"
           echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-          ls -lh $ANDROID_HOME 2>&1 | head -30 || ls -lh /usr/local/lib/android/sdk 2>&1 | head -30
-          # Ensure cmdline-tools and platforms are available (Ubuntu image already has them)
+          ls -lh $ANDROID_HOME 2>&1 | head -40 || ls -lh /usr/local/lib/android/sdk 2>&1 | head -40
           if [ -z "$ANDROID_HOME" ]; then
             export ANDROID_HOME=/usr/local/lib/android/sdk
             echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
@@ -43,9 +42,10 @@ jobs:
           if [ -z "$ANDROID_SDK_ROOT" ]; then
             echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
           fi
-          # Accept licenses
+          # Accept licenses and install required platforms
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>&1 | tail -20 || true
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --list 2>&1 | head -40 || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-34" "build-tools;34.0.0" "platform-tools" 2>&1 | tail -30 || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --list_installed 2>&1 | head -60 || true
           echo "SDK setup done"
 
       - name: Install dependencies
@@ -66,28 +66,59 @@ jobs:
       - name: Ensure Gradle wrapper
         run: |
           ls -lh android/gradle/wrapper/ || true
+          cat android/gradle/wrapper/gradle-wrapper.properties || true
           if [ ! -f android/gradle/wrapper/gradle-wrapper.jar ]; then
             echo "Downloading gradle wrapper jar..."
             mkdir -p android/gradle/wrapper
-            # try multiple sources
-            curl -L --retry 3 -o android/gradle/wrapper/gradle-wrapper.jar https://services.gradle.org/distributions/gradle-wrapper-8.7.jar || \
-            curl -L --retry 3 -o android/gradle/wrapper/gradle-wrapper.jar https://repo.maven.apache.org/maven2/org/gradle/gradle-wrapper/8.7/gradle-wrapper-8.7.jar || \
-            curl -L --retry 3 -o android/gradle/wrapper/gradle-wrapper.jar https://github.com/gradle/gradle/raw/v8.7.0/gradle/wrapper/gradle-wrapper.jar || \
-            wget -O android/gradle/wrapper/gradle-wrapper.jar https://services.gradle.org/distributions/gradle-wrapper-8.7.jar
+            set -x
+            curl -v -L --retry 3 -o android/gradle/wrapper/gradle-wrapper.jar https://services.gradle.org/distributions/gradle-wrapper-8.7.jar 2>&1 | tail -40 || true
+            ls -lh android/gradle/wrapper/gradle-wrapper.jar || echo "first url failed"
+            if [ ! -s android/gradle/wrapper/gradle-wrapper.jar ]; then
+              curl -L --retry 3 -o android/gradle/wrapper/gradle-wrapper.jar https://repo1.maven.org/maven2/org/gradle/gradle-wrapper/8.7/gradle-wrapper-8.7.jar 2>&1 | tail -20 || true
+              ls -lh android/gradle/wrapper/gradle-wrapper.jar || echo "second failed"
+            fi
+            if [ ! -s android/gradle/wrapper/gradle-wrapper.jar ]; then
+              # Fallback: use distro gradle zip extraction
+              echo "Trying to extract from gradle distribution..."
+              curl -L --retry 2 -o /tmp/gradle-8.7-bin.zip https://services.gradle.org/distributions/gradle-8.7-bin.zip 2>&1 | tail -5 || true
+              if [ -f /tmp/gradle-8.7-bin.zip ]; then
+                unzip -j /tmp/gradle-8.7-bin.zip "gradle-8.7/lib/gradle-wrapper-8.7.jar" -d /tmp 2>&1 | tail -5 || true
+                cp /tmp/gradle-wrapper-8.7.jar android/gradle/wrapper/gradle-wrapper.jar 2>&1 | tail -5 || true
+              fi
+            fi
+            ls -lh android/gradle/wrapper/gradle-wrapper.jar || echo "Still no wrapper jar!"
+            cat android/gradle/wrapper/gradle-wrapper.properties
+          else
             ls -lh android/gradle/wrapper/gradle-wrapper.jar
           fi
           chmod +x android/gradlew
+          ls -lh android/gradlew
 
       - name: Grant execute permission for gradlew
         run: chmod +x android/gradlew
 
+      - name: Show Gradle version
+        working-directory: android
+        run: ./gradlew --version 2>&1 | head -60 || true
+
       - name: Build Debug APK
         working-directory: android
-        run: ./gradlew assembleDebug --stacktrace --info
+        run: ./gradlew assembleDebug --stacktrace 2>&1 | tee /tmp/gradle.log; exit ${PIPESTATUS[0]}
 
       - name: Build Release APK (unsigned)
         working-directory: android
-        run: ./gradlew assembleRelease --stacktrace || echo "Release build failed, debug apk is available"
+        run: ./gradlew assembleRelease --stacktrace 2>&1 | tee /tmp/gradle-release.log; echo "release exit code ${PIPESTATUS[0]}" || true
+
+      - name: Upload Gradle logs (on failure)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-logs
+          path: |
+            /tmp/gradle*.log
+            android/app/build/outputs/
+            android/build/
+          if-no-files-found: warn
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
