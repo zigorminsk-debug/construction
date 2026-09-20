@@ -128,8 +128,11 @@ jobs:
       - name: Comment gradle log on commit (only on failure)
         if: failure()
         run: |
+          # Точные ошибки компиляции (Kotlin/Java) в начало комментария
+          ERRORS=$(grep -E "^e: |error: |FAILURE: Build failed" /tmp/gradle.log 2>/dev/null | head -40)
+          if [ -z "$ERRORS" ]; then ERR="(ошибки компиляции не найдены в логе, смотри хвост)"; fi
           LOG_TAIL=$(tail -n 120 /tmp/gradle.log 2>&1 | head -c 60000 || echo "no log file")
-          BODY=$(printf "Gradle log tail for run %s\n\`\`\`\n%s\n\`\`\`" "${{ github.run_id }}" "$LOG_TAIL")
+          BODY=$(printf "Ошибки сборки (run %s):\n%s\n\n---\n\nGradle log tail:\n\`\`\`\n%s\n\`\`\`" "${{ github.run_id }}" "$ERRORS" "$LOG_TAIL")
           echo "$BODY" > /tmp/body.txt
           gh api repos/${{ github.repository }}/commits/${{ github.sha }}/comments -f body="$(cat /tmp/body.txt)" 2>&1 | head -20 || echo "comment failed"
         env:
