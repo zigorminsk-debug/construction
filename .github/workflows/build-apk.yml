@@ -30,7 +30,23 @@ jobs:
           cache: 'gradle'
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        run: |
+          echo "Checking Android SDK..."
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          ls -lh $ANDROID_HOME 2>&1 | head -30 || ls -lh /usr/local/lib/android/sdk 2>&1 | head -30
+          # Ensure cmdline-tools and platforms are available (Ubuntu image already has them)
+          if [ -z "$ANDROID_HOME" ]; then
+            export ANDROID_HOME=/usr/local/lib/android/sdk
+            echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          fi
+          if [ -z "$ANDROID_SDK_ROOT" ]; then
+            echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
+          fi
+          # Accept licenses
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>&1 | tail -20 || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --list 2>&1 | head -40 || true
+          echo "SDK setup done"
 
       - name: Install dependencies
         run: npm ci || npm install
