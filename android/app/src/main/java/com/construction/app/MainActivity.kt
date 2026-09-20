@@ -5,7 +5,7 @@ import android.content.Context
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.print.PrintDocumentInfo
+import android.print.PrintAttributes
 import android.print.PrintManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -69,11 +69,9 @@ class MainActivity : AppCompatActivity() {
             handler.post {
                 try {
                     val adapter = webView.createPrintDocumentAdapter()
-                    val jobInfo = PrintDocumentInfo.Builder("Construction")
-                        .setPageCount(1)
-                        .build()
+                    val attrs = PrintAttributes.Builder().build()
                     val pm = getSystemService(Context.PRINT_SERVICE) as PrintManager
-                    pm.print("Construction", adapter, jobInfo)
+                    pm.print("Construction", adapter, attrs)
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }
