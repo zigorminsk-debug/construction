@@ -317,6 +317,154 @@ function renderAssemblyInfo(item){
 }
 
 // ==================== Карточка детали (развёртка + крепёж + позиция) ====================
+// ===== Полноэкранный просмотр эскиза: pinch-zoom / pan / double-tap / wheel =====
+let ZOOM = null
+function openZoomViewer(svgEl, title){
+  let ov = document.getElementById('zoomOverlay')
+  if(!ov){
+    ov = document.createElement('div')
+    ov.id = 'zoomOverlay'
+    ov.className = 'zoom-overlay'
+    ov.innerHTML = `
+      <div class="zoom-top">
+        <span class="zoom-title"></span>
+        <span class="zoom-btns">
+          <button type="button" class="zoom-btn" data-z="out" title="Меньше">−</button>
+          <button type="button" class="zoom-btn" data-z="in" title="Больше">＋</button>
+          <button type="button" class="zoom-btn" data-z="reset" title="Сбросить масштаб">⤢</button>
+          <button type="button" class="zoom-btn zoom-close" data-z="close" title="Закрыть">✕</button>
+        </span>
+      </div>
+      <div class="zoom-stage"><div class="zoom-box"></div></div>
+      <div class="zoom-hint">щипок — масштаб · двойной тап — приблизить · перетаскивание — сдвиг</div>`
+    document.body.appendChild(ov)
+
+    const stage = ov.querySelector('.zoom-stage')
+    const box = ov.querySelector('.zoom-box')
+    const state = { S: 1, tx: 0, ty: 0 }
+    ZOOM = { ov, stage, box, state }
+
+    const apply = () => {
+      box.style.transform = `translate(${state.tx}px, ${state.ty}px) scale(${state.S})`
+      ov.querySelector('.zoom-hint').style.opacity = state.S > 1 ? 0 : 1
+    }
+
+    // зум, зафиксированный в точке p (client-координаты)
+    const zoomAt = (p, newS) => {
+      newS = Math.round(Math.min(6, Math.max(1, newS)) * 1000) / 1000
+      if(newS === state.S) return
+      const sr = stage.getBoundingClientRect()
+      const br = box.getBoundingClientRect()
+      const Cx = br.left + br.width/2 - sr.left
+      const Cy = br.top + br.height/2 - sr.top
+      const dx = p.x - sr.left - Cx
+      const dy = p.y - sr.top - Cy
+      const f = newS / state.S
+      state.tx += (1 - f) * dx
+      state.ty += (1 - f) * dy
+      state.S = newS
+      if(state.S === 1){ state.tx = 0; state.ty = 0 }
+      apply()
+    }
+
+    ov.querySelectorAll('.zoom-btn').forEach(b=>{
+      b.addEventListener('click', e=>{
+        e.stopPropagation()
+        const z = b.dataset.z
+        if(z === 'close') closeZoomViewer()
+        else if(z === 'in') zoomAt({x: innerWidth/2, y: innerHeight/2}, state.S * 1.4)
+        else if(z === 'out') zoomAt({x: innerWidth/2, y: innerHeight/2}, state.S / 1.4)
+        else { state.S = 1; state.tx = 0; state.ty = 0; apply() }
+      })
+    })
+
+    // --- touch: pinch / pan / double-tap ---
+    const touches = new Map()
+    let pinch = null, pan = null, lastTap = {t:0, x:0, y:0}
+
+    stage.addEventListener('touchstart', e=>{
+      e.preventDefault()
+      for(const t of e.changedTouches) touches.set(t.identifier, {x: t.clientX, y: t.clientY})
+      if(touches.size === 1){
+        const t = e.changedTouches[0]
+        const now = Date.now()
+        if(now - lastTap.t < 300 && Math.hypot(t.clientX - lastTap.x, t.clientY - lastTap.y) < 40){
+          zoomAt({x: t.clientX, y: t.clientY}, state.S > 1.2 ? 1 : 2.5)
+          lastTap.t = 0
+        } else {
+          lastTap = {t: now, x: t.clientX, y: t.clientY}
+          if(state.S > 1) pan = {x: t.clientX, y: t.clientY, tx: state.tx, ty: state.ty}
+        }
+      } else if(touches.size === 2){
+        pan = null
+        const [a, b] = [...touches.values()]
+        pinch = {d: Math.max(20, Math.hypot(a.x - b.x, a.y - b.y)), s: state.S}
+      }
+    }, {passive: false})
+
+    stage.addEventListener('touchmove', e=>{
+      e.preventDefault()
+      for(const t of e.changedTouches) if(touches.has(t.identifier)) touches.set(t.identifier, {x: t.clientX, y: t.clientY})
+      if(touches.size === 2 && pinch){
+        const [a, b] = [...touches.values()]
+        const d = Math.max(20, Math.hypot(a.x - b.x, a.y - b.y))
+        zoomAt({x: (a.x + b.x)/2, y: (a.y + b.y)/2}, pinch.s * d / pinch.d)
+      } else if(touches.size === 1 && pan){
+        const t = [...touches.values()][0]
+        state.tx = pan.tx + (t.x - pan.x)
+        state.ty = pan.ty + (t.y - pan.y)
+        apply()
+      }
+    }, {passive: false})
+
+    const touchEnd = e=>{
+      for(const t of e.changedTouches) touches.delete(t.identifier)
+      if(touches.size < 2) pinch = null
+      if(!touches.size) pan = null
+    }
+    stage.addEventListener('touchend', touchEnd)
+    stage.addEventListener('touchcancel', touchEnd)
+
+    // --- mouse: wheel / drag / dblclick (десктоп) ---
+    stage.addEventListener('wheel', e=>{
+      e.preventDefault()
+      zoomAt({x: e.clientX, y: e.clientY}, state.S * (e.deltaY < 0 ? 1.12 : 1/1.12))
+    }, {passive: false})
+    let mdown = null
+    stage.addEventListener('mousedown', e=>{
+      if(state.S > 1){ mdown = {x: e.clientX, y: e.clientY, tx: state.tx, ty: state.ty}; e.preventDefault() }
+    })
+    window.addEventListener('mousemove', e=>{
+      if(mdown){ state.tx = mdown.tx + (e.clientX - mdown.x); state.ty = mdown.ty + (e.clientY - mdown.y); apply() }
+    })
+    window.addEventListener('mouseup', ()=> mdown = null)
+    stage.addEventListener('dblclick', e=> zoomAt({x: e.clientX, y: e.clientY}, state.S > 1.2 ? 1 : 2.5))
+    stage.addEventListener('click', e=>{ if(e.target === stage && state.S === 1) closeZoomViewer() })
+  }
+
+  ZOOM.box.innerHTML = ''
+  const svg = svgEl.cloneNode(true)
+  svg.removeAttribute('width')
+  svg.removeAttribute('height')
+  ZOOM.box.appendChild(svg)
+  ZOOM.ov.querySelector('.zoom-title').textContent = title
+  ZOOM.state.S = 1; ZOOM.state.tx = 0; ZOOM.state.ty = 0
+  ZOOM.box.style.transform = 'none'
+  ZOOM.ov.classList.add('open')
+}
+function closeZoomViewer(){
+  const ov = document.getElementById('zoomOverlay')
+  if(ov) ov.classList.remove('open')
+}
+document.addEventListener('keydown', e=>{ if(e.key === 'Escape') closeZoomViewer() })
+function makeZoomable(el, title){
+  if(!el) return
+  el.addEventListener('click', ()=>{
+    const svg = el.querySelector('svg')
+    if(svg) openZoomViewer(svg, title)
+  })
+}
+
 function openPartCard(key){
   if(!lastLayout) return
   const item = lastLayout.items.find(i=> i.key===key) || lastLayout.items.find(i=> i.key.startsWith(key+'-'))
@@ -369,11 +517,11 @@ function openPartCard(key){
     <div class="pm-grid">
       <div class="pm-block">
         <div class="pm-block-title">📍 Позиция в изделии</div>
-        <div class="pm-pos" id="pmPos"></div>
+        <div class="pm-pos zoomable" id="pmPos"></div>
       </div>
       <div class="pm-block">
         <div class="pm-block-title">✂️ Развёртка (раскрой) с разметкой отверстий</div>
-        <div class="pm-flat" id="pmFlat"></div>
+        <div class="pm-flat zoomable" id="pmFlat"></div>
       </div>
       <div class="pm-block pm-block-wide">
         <div class="pm-block-title">🕳️ Разметка отверстий (${item.holes.length})</div>
@@ -388,6 +536,8 @@ function openPartCard(key){
 
   drawMiniPos($('#pmPos'), item, lastLayout, lastResult.params)
   drawPartFlat($('#pmFlat'), item, lastResult.params)
+  makeZoomable($('#pmPos'), 'Позиция в изделии')
+  makeZoomable($('#pmFlat'), 'Развёртка (раскрой) с разметкой отверстий')
 
   modal.classList.add('open')
   modal.scrollTop = 0

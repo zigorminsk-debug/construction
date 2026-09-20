@@ -281,3 +281,20 @@ input,select,button{font-family:inherit}
 .metal-cut-card{ background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:var(--shadow);margin-bottom:16px }
 .metal-cut-table{ min-width:560px }
 .metal-cut-note{ padding:10px 14px;background:#eff6ff;border-top:1px solid #bfdbfe;font-size:12px;color:#1e40af;line-height:1.5 }
+
+/* ===== Полноэкранный просмотр эскиза (zoom) ===== */
+.zoom-overlay{ position:fixed;inset:0;z-index:90;background:rgba(10,20,15,.94);display:none;touch-action:none;overscroll-behavior:none }
+.zoom-overlay.open{ display:block;animation:fade .18s ease }
+.zoom-top{ position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;z-index:2;pointer-events:none }
+.zoom-title{ color:#e2e8f0;font-weight:800;font-size:13px;max-width:52vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis }
+.zoom-btns{ display:flex;gap:6px;pointer-events:auto }
+.zoom-btn{ width:42px;height:42px;border-radius:12px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.1);color:#fff;font-size:18px;font-weight:800;cursor:pointer;backdrop-filter:blur(6px) }
+.zoom-btn:active{ background:var(--accent);color:#1a1a1a }
+.zoom-stage{ position:absolute;inset:0;display:grid;place-items:center;overflow:hidden;cursor:grab }
+.zoom-stage:active{ cursor:grabbing }
+.zoom-box{ will-change:transform;transition:transform .05s linear }
+.zoom-box svg{ width:min(92vw,860px);height:auto;max-height:calc(100vh - 120px);display:block;filter:drop-shadow(0 20px 60px rgba(0,0,0,.5)) }
+.zoom-hint{ position:absolute;bottom:10px;left:0;right:0;text-align:center;color:rgba(226,232,240,.55);font-size:11px;pointer-events:none;transition:opacity .3s }
+/* кликабельные эскизы в карточке детали */
+.pm-pos.zoomable,.pm-flat.zoomable{ cursor:zoom-in;position:relative }
+.pm-pos.zoomable::after,.pm-flat.zoomable::after{ content:'🔍 нажми — увеличить';position:absolute;top:6px;right:6px;background:rgba(255,255,255,.92);border:1px solid var(--line2);border-radius:99px;font-size:10px;font-weight:700;color:var(--accent2);padding:3px 8px;pointer-events:none }
