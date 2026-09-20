@@ -362,6 +362,12 @@ export function calculate(params){
       if(p.rear && !isLegs){
         // задняя стенка не нужна
       }
+      // Металлический каркас (профтруба): стойки-ножки под столешницу + нижние рамы
+      if(p.metalFrame && isLegs){
+        const prof = p._frameProfile
+        addMetal('Стойка каркаса', Math.max(100, p.H - tableT), 4, prof, '4 угла, под столешницей')
+        addMetal('Рама нижняя', p.W - 2*prof.a, 2, prof, 'фронт + бэк, стягивает стойки снизу')
+      }
       break
     }
     case 'polka': {
@@ -383,6 +389,12 @@ export function calculate(params){
           for(let i=0;i<p.shelves;i++) add(`Полка ${i+1}`, innerW-2, p.D-20, 1, { edge:'перед', group:'наполнение' })
         }
         if(p.rear) add('Задняя стенка ДВП', p.W-4, p.H-4, 1, { material:'ДВП 3.2 мм', thickness:3.2, group:'корпус' })
+        // Металлический каркас (профтруба) для полки-короба
+        if(p.metalFrame){
+          const prof = p._frameProfile
+          addMetal('Стойка каркаса', p.H, 4, prof, '4 угла, полная высота')
+          addMetal('Рама нижняя', p.W - 2*prof.a, 2, prof, 'фронт + бэк, стягивает стойки снизу')
+        }
       }
       break
     }
@@ -428,6 +440,18 @@ export function calculate(params){
       break
     }
   }
+
+  // ===== Максимальная нагрузка на полку (изгиб + прогиб L/350) =====
+  // «Верх» изделия «Полка» (короб) — тоже несущая полка
+  parts.forEach(pt=>{
+    if(pt.h > 0 && pt.kind !== 'metal' && (pt.name.startsWith('Полка') || (pt.name === 'Верх' && p.type === 'polka'))){
+      const kg = shelfLoadKg(pt.thickness, pt.w, pt.h, pt.material)
+      if(kg){
+        pt.maxLoad = kg
+        pt.note = `${pt.note ? pt.note + '; ' : ''}макс. нагрузка ≤ ${kg} кг (пролёт ${pt.w} мм, ${pt.thickness} мм, ${pt.material})`
+      }
+    }
+  })
 
   // ===== Авторазрез: деталь больше листа → режем на сегменты + узел стыковки =====
   const splitMap = {}
@@ -521,6 +545,34 @@ function splitOversized(parts, sheetW, sheetH, splitMap){
     parts.splice(i, 1, ...newParts)
     splitMap[p.name] = { total: N, longAxis, longN, shortN, longSizes, shortSizes, origW: w, origH: h }
   }
+}
+
+// Модуль упругости E, МПа, и допустимое напряжение изгиба, МПа — по базовому материалу
+const SHELF_E   = { 'ЛДСП': 3800, 'МДФ': 4200, 'Фанера': 9000, 'ОСП': 4500, 'OSB': 4500, 'ДСП': 3400 }
+const SHELF_SIG = { 'ЛДСП': 9,    'МДФ': 10,   'Фанера': 22,   'ОСП': 8,    'OSB': 8,    'ДСП': 7 }
+
+/**
+ * Максимальная нагрузка на полку, кг.
+ * Полка — балка на двух опорах, распределённая нагрузка:
+ *  - прогиб ≤ L/350:  P = 384·E·I / (1750·L²)
+ *  - прочность изгиба: P = 16·I·[σ] / (t·L)
+ * I = b·t³/12, где L — пролёт (ширина полки), b — ширина поперёк (глубина).
+ * Возвращает меньшее из двух, округлённое в меньшую сторону (кг).
+ */
+export function shelfLoadKg(t, L, b, label){
+  if(!(t > 0) || !(L > 200) || !(b > 0)) return null
+  let base = null
+  for(const k of Object.keys(SHELF_E)){
+    if(label && label.includes(k)){ base = k; break }
+  }
+  const E = base ? SHELF_E[base] : 3800
+  const sig = base ? SHELF_SIG[base] : 9
+  const I = b * Math.pow(t, 3) / 12
+  const pDefl = 384 * E * I / (1750 * L * L) / 9.81   // N → кг
+  const pSig = 16 * I * sig / (t * L) / 9.81
+  const kg = Math.min(pDefl, pSig)
+  if(!(kg > 0) || !isFinite(kg)) return null
+  return Math.max(0.5, Math.floor(kg * 10) / 10)
 }
 
 function normalize(params){

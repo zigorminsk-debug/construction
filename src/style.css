@@ -180,13 +180,34 @@ input,select,button{font-family:inherit}
 
 /* Print */
 @media print{
-  .header,.panel-left,.tabs,.mobile-nav,.view-switch,.canvas-toolbar .toolbar-right,.parts-actions,.btn{display:none !important}
-  body.view-params .main{display:flex !important}
-  #app{display:block;height:auto;min-height:0;overflow:visible}
-  .layout{display:block;grid-template-columns:none;height:auto;min-height:0}
-  .main{height:auto;min-height:0;overflow:visible}
-  .main-content{padding:0;overflow:visible}
-  .canvas-wrap,.proj-card,.table-wrap,.sheet-card{box-shadow:none;break-inside:avoid}
+  @page{ size: A4 portrait; margin: 8mm }
+  html,body{ background:#fff !important; margin:0 !important; padding:0 !important }
+  /* не печатать хром приложения */
+  .header,.panel-left,.tabs,.mobile-nav,.view-switch,.zoom-overlay,.pm-overlay,.toast,
+  .canvas-toolbar,.parts-actions,.asm-hint,.canvas-legend,#assemblyLegend,.sheet-legend,
+  .cutting-tips,.btn,.btn-small,.custom-mat,.summary-mini{ display:none !important }
+  #app{ display:block !important; height:auto !important; min-height:0 !important; overflow:visible !important; padding:0 !important; background:#fff !important }
+  .layout{ display:block !important; height:auto !important; min-height:0 !important }
+  /* мобильное переключение «Параметры/Результат» — в печати видим оба блока */
+  body.view-params .main, body:not(.view-params) .panel-left{ display:block !important }
+  .main,.main-content{ display:block !important; height:auto !important; min-height:0 !important; overflow:visible !important; padding:0 !important; background:#fff !important }
+  /* печатаем ВСЕ вкладки подряд, каждая с заголовком */
+  .tab-panel{ display:block !important; background:#fff !important; padding:0 0 10px }
+  .tab-panel::before{ content:attr(data-title); display:block; font-size:15px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:#000; margin:18px 0 10px; padding-bottom:6px; border-bottom:2px solid #000 }
+  .tab-panel:first-of-type::before{ margin-top:0 }
+  .canvas-wrap,.proj-card,.sheet-card,.table-wrap,.est-card,.part-sketch,.parts-sketches,.joints-totals{ background:#fff !important; box-shadow:none !important; break-inside:avoid }
+  .table-wrap{ max-height:none !important; overflow:visible !important }
+  .projections-grid{ display:grid !important; grid-template-columns:1fr 1fr !important; gap:8px !important }
+  .parts-sketches{ display:grid !important; grid-template-columns:1fr 1fr !important; gap:8px !important }
+  .estimate-grid{ display:grid !important; grid-template-columns:1fr 1fr !important; gap:8px !important }
+  .stepper-grid{ display:grid !important; grid-template-columns:repeat(4,1fr) !important }
+  svg{ max-width:100% !important; height:auto !important }
+  .canvas-wrap svg{ max-height:none !important }
+  /* белый фон и чёрный текст во всём контенте */
+  .main *{ background-color:#fff !important; color:#000 !important; box-shadow:none !important }
+  .main *::before,.main *::after{ background-color:transparent !important; color:#000 !important }
+  .tab-panel::before{ background-color:#fff !important }
+  tr,td,th{ break-inside:avoid }
 }
 
 /* Mobile / narrow window: one screen at a time — «Параметры» или «Результат» */
@@ -315,3 +336,5 @@ input,select,button{font-family:inherit}
 .custom-mat-x:hover{opacity:1}
 /* узел стыковки в карточке детали */
 .pm-split-note{margin-top:6px;font-size:12px;font-weight:600;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:6px 10px}
+/* бейдж максимальной нагрузки на полку */
+.load-badge{display:inline-block;font-weight:800;color:#1e3a2f;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:99px;padding:1px 8px;font-size:11px;white-space:nowrap}

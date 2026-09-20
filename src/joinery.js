@@ -369,14 +369,23 @@ export function buildLayout(result, p){
     const tableT = Math.max(t, 22)
     const legH = p.H - tableT
     const isLegs = p.tableSupport === 'legs'
+    const fprof = p._frameProfile
+    const fpw = fprof.a, fph = fprof.b
+    // отверстия под болты каркаса в дне столешницы (2 на стойку)
+    const frameTopHoles = (isLegs && p.metalFrame) ? [
+      HOLE('bottom', fpw / 4, fph / 2, 6.6, tableT, 'bolt'), HOLE('bottom', fpw * 3 / 4, fph / 2, 6.6, tableT, 'bolt'),
+      HOLE('bottom', p.W - fpw / 4, fph / 2, 6.6, tableT, 'bolt'), HOLE('bottom', p.W - fpw * 3 / 4, fph / 2, 6.6, tableT, 'bolt'),
+      HOLE('bottom', fpw / 4, p.D - fph / 2, 6.6, tableT, 'bolt'), HOLE('bottom', fpw * 3 / 4, p.D - fph / 2, 6.6, tableT, 'bolt'),
+      HOLE('bottom', p.W - fpw / 4, p.D - fph / 2, 6.6, tableT, 'bolt'), HOLE('bottom', p.W - fpw * 3 / 4, p.D - fph / 2, 6.6, tableT, 'bolt')
+    ] : []
     add('top', 'Столешница', 0, p.H - tableT, 0, p.W, tableT, p.D, {
       group: 'корпус',
       holes: isLegs
         ? [HOLE('bottom', 30, 20, 4, 40, 'screw'), HOLE('bottom', 30, p.D - 20, 4, 40, 'screw'),
-           HOLE('bottom', p.W - 30, 20, 4, 40, 'screw'), HOLE('bottom', p.W - 30, p.D - 20, 4, 40, 'screw')]
+           HOLE('bottom', p.W - 30, 20, 4, 40, 'screw'), HOLE('bottom', p.W - 30, p.D - 20, 4, 40, 'screw'), ...frameTopHoles]
         : [HOLE('bottom', t / 2, 20, 8, 40, 'dowel'), HOLE('bottom', t / 2, p.D - 40, 8, 40, 'dowel'),
            HOLE('bottom', p.W - t / 2, 20, 8, 40, 'dowel'), HOLE('bottom', p.W - t / 2, p.D - 40, 8, 40, 'dowel')],
-      note: isLegs ? 'крепление ножек саморезами по металлу' : 'шканты Ø8×40 в опоры + клей',
+      note: isLegs ? (p.metalFrame ? 'каркас: болты M6 в стойки, разметка Ø6.6 на развёртке' : 'крепление ножек саморезами по металлу') : 'шканты Ø8×40 в опоры + клей',
       normal: 'y', normalDir: 1, uAxis: 'x', vAxis: 'z', origin: [0, p.H, 0]
     })
     if(!isLegs){
@@ -422,6 +431,34 @@ export function buildLayout(result, p){
       }
       joint('Опора ↔ Столешница', 'Боковина-опора', 'Столешница', [{ type: 'dowel', qty: 4, name: 'Шкант Ø8×40 + клей' }], 'по 2 шканта на опору, 20 мм от краёв')
       joint('Царги ↔ Опоры', 'Царга', 'Боковина-опора', [{ type: 'screw', qty: 12, name: 'Саморез Ø4×40' }], 'фронтальная: 2 на торец, боковые: 1 на торец')
+    }else if(p.metalFrame){
+      // каркас из профтрубы: 4 стойки под столешницей + нижние рамы
+      const frameLabel = `Профиль ${fpw}×${fph}×${fprof.wall}`
+      ;[[0, 0, 'fl'], [p.W - fpw, 0, 'fr'], [0, p.D - fph, 'bl'], [p.W - fpw, p.D - fph, 'br']].forEach(([px, pz, tag], i)=>{
+        const isLeft = tag === 'fl' || tag === 'bl'
+        add(`frame-post-${i}`, 'Стойка каркаса', px, 0, pz, fpw, legH, fph, {
+          group: 'рама', metal: true, section: `${fpw}×${fph}×${fprof.wall}`,
+          part: byName.get('Стойка каркаса') || { name: 'Стойка каркаса', w: legH, h: 0, thickness: fprof.wall, material: frameLabel, edge: '', note: '' },
+          plateW: legH, plateH: fph, thick: fpw,
+          holes: [HOLE('M', 20, fph / 2, 6.6, fpw, 'bolt'), HOLE('M', legH - 20, fph / 2, 6.6, fpw, 'bolt')],
+          note: 'болты M6: столешница сверху, рама снизу',
+          normal: 'x', normalDir: isLeft ? 1 : -1, uAxis: 'y', vAxis: 'z',
+          origin: [isLeft ? fpw : p.W - fpw, 0, pz]
+        })
+      })
+      ;[0, p.D - fph].forEach((zz, zi)=>{
+        add(`frame-rail-${zi}`, 'Рама нижняя', fpw, 0, zz, p.W - 2 * fpw, fpw, fph, {
+          group: 'рама', metal: true, section: `${fpw}×${fph}×${fprof.wall}`,
+          part: byName.get('Рама нижняя') || { name: 'Рама нижняя', w: p.W - 2 * fpw, h: 0, thickness: fprof.wall, material: frameLabel, edge: '', note: '' },
+          plateW: p.W - 2 * fpw, plateH: fph, thick: fpw,
+          holes: [HOLE('M', 10, fph / 2, 6.6, fpw, 'bolt'), HOLE('M', p.W - 2 * fpw - 10, fph / 2, 6.6, fpw, 'bolt')],
+          note: 'болты M6 к стойкам: по 1 на стойку',
+          normal: 'z', normalDir: zi === 0 ? -1 : 1, uAxis: 'x', vAxis: 'z',
+          origin: [fpw, 0, zz]
+        })
+      })
+      joint('Столешница ↔ Стойка каркаса', 'Столешница', 'Стойка каркаса', [{ type: 'bolt', qty: 8, name: 'Болт M6×25 + гайка + шайба' }], 'по 2 болта на стойку через столешницу, разметка Ø6.6 на развёртке')
+      joint('Стойка каркаса ↔ Рама нижняя', 'Стойка каркаса', 'Рама нижняя', [{ type: 'bolt', qty: 4, name: 'Болт M6×20 + гайка' }], 'по 1 болту на стойку, 10 мм от торца рамы')
     }else{
       ;[[15, 15], [p.W - 65, 15], [15, p.D - 65], [p.W - 65, p.D - 65]].forEach((pos, i)=>{
         add(`metal-leg-${i}`, `Ножка металлическая ${i + 1}`, pos[0], 0, pos[1], 50, p.H - tableT, 50, {

@@ -109,6 +109,11 @@ function bindUI(){
   // каркас из профтрубы
   $('#chkMetalFrame').addEventListener('change', e=>{
     state.metalFrame=e.target.checked
+    // для стола каркас работает только в режиме «металл ножки» — переключаем автоматически
+    if(state.type==='stol' && state.metalFrame && state.tableSupport!=='legs'){
+      state.tableSupport='legs'
+      updateExtraOptions()
+    }
     toggleFrameUI()
     saveState(); recalc()
   })
@@ -603,6 +608,7 @@ function openPartCard(key){
         <div class="pm-sub">
           ${p.material} • ${item.metal ? `длина ${Math.round(item.plateW)} мм • сечение ${item.section||''}` : `${item.plateW} × ${item.plateH} × ${item.thick} мм`}
           ${p.edge && p.edge!=='-' ? ` • кромка: ${p.edge}` : ''}
+          ${p.maxLoad ? ` • <span class="load-badge">⚖️ макс. нагрузка ≤ ${p.maxLoad} кг</span>` : ''}
         </div>
         ${p.splitInfo? `<div class="pm-split-note">🔗 Узел стыковки: деталь разрезана на <b>${p.splitInfo.total}</b> сегмента под лист — это сегмент <b>${p.splitInfo.index+1}</b> из ${p.splitInfo.total} (цельная деталь: ${p.splitInfo.origW}×${p.splitInfo.origH} мм)</div>` : ''}
       </div>
@@ -1233,3 +1239,8 @@ init()
 // expose for debugging
 window._state=state
 window._calc=calculate
+window.__recalc=recalc
+window.__result=()=>lastResult
+window.__layout=()=>lastLayout
+window.__openPartCard=openPartCard
+window.__selectPart=selectPart
