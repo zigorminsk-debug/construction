@@ -63,47 +63,50 @@ jobs:
           ls -lh android/app/src/main/assets/www/
           echo "Assets synced"
 
+      - name: Setup Gradle 8.7
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.7
+
       - name: Ensure Gradle wrapper
         run: |
           ls -lh android/gradle/wrapper/ || true
           cat android/gradle/wrapper/gradle-wrapper.properties || true
-          if [ ! -f android/gradle/wrapper/gradle-wrapper.jar ]; then
-            echo "Downloading gradle wrapper jar..."
+          # Try to download wrapper jar via multiple mirrors, fallback to generating via installed gradle
+          if [ ! -s android/gradle/wrapper/gradle-wrapper.jar ]; then
+            echo "Wrapper jar missing or empty, attempting download..."
             mkdir -p android/gradle/wrapper
-            set -x
-            curl -v -L --retry 3 -o android/gradle/wrapper/gradle-wrapper.jar https://services.gradle.org/distributions/gradle-wrapper-8.7.jar 2>&1 | tail -40 || true
-            ls -lh android/gradle/wrapper/gradle-wrapper.jar || echo "first url failed"
+            curl -L --retry 3 -o android/gradle/wrapper/gradle-wrapper.jar https://services.gradle.org/distributions/gradle-wrapper-8.7.jar 2>&1 | tail -20 || true
             if [ ! -s android/gradle/wrapper/gradle-wrapper.jar ]; then
-              curl -L --retry 3 -o android/gradle/wrapper/gradle-wrapper.jar https://repo1.maven.org/maven2/org/gradle/gradle-wrapper/8.7/gradle-wrapper-8.7.jar 2>&1 | tail -20 || true
-              ls -lh android/gradle/wrapper/gradle-wrapper.jar || echo "second failed"
+              curl -L --retry 3 -o android/gradle/wrapper/gradle-wrapper.jar https://repo.maven.apache.org/maven2/org/gradle/gradle-wrapper/8.7/gradle-wrapper-8.7.jar 2>&1 | tail -20 || true
             fi
-            if [ ! -s android/gradle/wrapper/gradle-wrapper.jar ]; then
-              # Fallback: use distro gradle zip extraction
-              echo "Trying to extract from gradle distribution..."
-              curl -L --retry 2 -o /tmp/gradle-8.7-bin.zip https://services.gradle.org/distributions/gradle-8.7-bin.zip 2>&1 | tail -5 || true
-              if [ -f /tmp/gradle-8.7-bin.zip ]; then
-                unzip -j /tmp/gradle-8.7-bin.zip "gradle-8.7/lib/gradle-wrapper-8.7.jar" -d /tmp 2>&1 | tail -5 || true
-                cp /tmp/gradle-wrapper-8.7.jar android/gradle/wrapper/gradle-wrapper.jar 2>&1 | tail -5 || true
-              fi
-            fi
-            ls -lh android/gradle/wrapper/gradle-wrapper.jar || echo "Still no wrapper jar!"
-            cat android/gradle/wrapper/gradle-wrapper.properties
-          else
-            ls -lh android/gradle/wrapper/gradle-wrapper.jar
+            ls -lh android/gradle/wrapper/gradle-wrapper.jar || echo "download failed"
           fi
-          chmod +x android/gradlew
-          ls -lh android/gradlew
-
-      - name: Grant execute permission for gradlew
-        run: chmod +x android/gradlew
+          if [ ! -s android/gradle/wrapper/gradle-wrapper.jar ]; then
+            echo "Generating wrapper via installed gradle..."
+            gradle --version 2>&1 | head -20 || true
+            (cd android && gradle wrapper --gradle-version 8.7 2>&1 | tail -20 || true)
+            ls -lh android/gradle/wrapper/gradle-wrapper.jar || echo "still missing"
+          fi
+          chmod +x android/gradlew || true
+          ls -lh android/gradlew 2>&1 | head -20 || true
+          ls -lh android/gradle/wrapper/ 2>&1 | head -20 || true
 
       - name: Show Gradle version
         working-directory: android
-        run: ./gradlew --version 2>&1 | head -60 || true
+        run: |
+          ./gradlew --version 2>&1 | head -60 || true
+          gradle --version 2>&1 | head -60 || true
 
       - name: Build Debug APK
         working-directory: android
-        run: ./gradlew assembleDebug --stacktrace 2>&1 | tee /tmp/gradle.log; exit ${PIPESTATUS[0]}
+        run: |
+          if [ -s gradle/wrapper/gradle-wrapper.jar ]; then
+            ./gradlew assembleDebug --stacktrace 2>&1 | tee /tmp/gradle.log; exit ${PIPESTATUS[0]}
+          else
+            echo "Wrapper missing, using gradle directly"
+            gradle assembleDebug --stacktrace 2>&1 | tee /tmp/gradle.log; exit ${PIPESTATUS[0]}
+          fi
 
       - name: Dump gradle log to summary
         if: always()
@@ -131,7 +134,12 @@ jobs:
 
       - name: Build Release APK (unsigned)
         working-directory: android
-        run: ./gradlew assembleRelease --stacktrace 2>&1 | tee /tmp/gradle-release.log; echo "release exit code ${PIPESTATUS[0]}" || true
+        run: |
+          if [ -s gradle/wrapper/gradle-wrapper.jar ]; then
+            ./gradlew assembleRelease --stacktrace 2>&1 | tee /tmp/gradle-release.log; echo "release exit code ${PIPESTATUS[0]}" || true
+          else
+            gradle assembleRelease --stacktrace 2>&1 | tee /tmp/gradle-release.log; echo "release exit code ${PIPESTATUS[0]}" || true
+          fi
 
       - name: Upload Gradle logs (on failure)
         if: always()
