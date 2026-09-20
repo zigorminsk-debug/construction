@@ -181,6 +181,7 @@ input,select,button{font-family:inherit}
 /* Print */
 @media print{
   @page{ size: A4 portrait; margin: 8mm }
+  html{ zoom:1 !important }
   html,body{ background:#fff !important; margin:0 !important; padding:0 !important }
   /* не печатать хром приложения */
   .header,.panel-left,.tabs,.mobile-nav,.view-switch,.zoom-overlay,.pm-overlay,.toast,
@@ -338,6 +339,11 @@ input,select,button{font-family:inherit}
 .pm-split-note{margin-top:6px;font-size:12px;font-weight:600;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:6px 10px}
 /* бейдж максимальной нагрузки на полку */
 .load-badge{display:inline-block;font-weight:800;color:#1e3a2f;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:99px;padding:1px 8px;font-size:11px;white-space:nowrap}
+/* колонка «разметка отверстий» в списке деталей */
+.holes-cell{color:#2563eb;font-weight:700;cursor:pointer;white-space:nowrap}
+.holes-cell:hover{text-decoration:underline}
+/* кнопки масштаба шрифта в шапке */
+.font-btn{font-weight:800;letter-spacing:.02em}
 
 /* ===== Справка (пошаговая инструкция) ===== */
 .help-card{ max-width:820px }

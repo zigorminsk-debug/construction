@@ -45,7 +45,9 @@ let state = {
   frameProfile: '40x20',
   frameWall: 0,
   // мои материалы (свой размер листа)
-  customMats: []
+  customMats: [],
+  // масштаб шрифта (кнопки A−/A+ в шапке)
+  fontScale: 1
 }
 
 let lastResult = null
@@ -58,6 +60,7 @@ function init(){
   setCustomMats(state.customMats)
   bindUI()
   syncUIFromState()
+  applyFontScale()
   recalc()
   setupTabs()
 }
@@ -158,6 +161,10 @@ function bindUI(){
     if(e.target.id==='selTableSupport'){ state.tableSupport=e.target.value; saveState(); recalc() }
     if(e.target.id==='selPolkaType'){ state.polkaType=e.target.value; saveState(); recalc() }
   })
+
+  // масштаб шрифта
+  $('#btnFontMinus').addEventListener('click', ()=> changeFontScale(-1))
+  $('#btnFontPlus').addEventListener('click', ()=> changeFontScale(1))
 
   // справка
   $('#btnHelp').addEventListener('click', openHelp)
@@ -670,6 +677,26 @@ function closeHelp(){
   if(m) m.classList.remove('open')
 }
 
+// ==================== Масштаб шрифта (A−/A+ в шапке) ====================
+const FONT_STEPS = [0.9, 1, 1.12, 1.25, 1.4, 1.6]
+function applyFontScale(){
+  const z = state.fontScale || 1
+  document.documentElement.style.zoom = z === 1 ? '' : String(z)
+  const pct = Math.round(z * 100) + '%'
+  const fm = $('#btnFontMinus'), fp = $('#btnFontPlus')
+  if(fm) fm.title = `Уменьшить шрифт (сейчас ${pct})`
+  if(fp) fp.title = `Увеличить шрифт (сейчас ${pct})`
+}
+function changeFontScale(dir){
+  const cur = state.fontScale || 1
+  let i = FONT_STEPS.findIndex(s=> Math.abs(s - cur) < 0.001)
+  if(i < 0) i = 1
+  i = Math.max(0, Math.min(FONT_STEPS.length - 1, i + dir))
+  state.fontScale = FONT_STEPS[i]
+  applyFontScale()
+  saveState()
+}
+
 // ==================== Проверка обновления (кнопка в справке) ====================
 const UPDATE_REPO = 'zigorminsk-debug/construction'
 let updateChecking = false
@@ -960,12 +987,21 @@ function renderParts(){
   const tbody=$('#partsTable tbody')
   tbody.innerHTML=''
   let idx=1
+  // количество отверстий на деталь (из layout: у всех копий детали одинаково)
+  const holesById = {}
+  if(lastLayout) lastLayout.items.forEach(i=>{
+    if(i.partId && !(i.partId in holesById)) holesById[i.partId] = i.holes.length
+  })
+
   lastResult.parts.forEach(p=>{
     const tr=document.createElement('tr')
     const area=(p.w*p.h/1e6).toFixed(3)
     const totalArea=(p.w*p.h*p.count/1e6).toFixed(3)
     const sizeTxt = p.kind==='metal' ? `${p.w} <span style="color:#64748b">мм • ${p.section||''}</span>` : `${p.w} × ${p.h} <span style="color:#64748b">мм</span>`
     const key = partKeyById(p.id)
+    const holes = holesById[p.id] || 0
+    const loadTxt = p.maxLoad ? `<span class="load-badge" title="Максимальная нагрузка по прогибу и прочности — рассчитана по толщине, пролёту, глубине и материалу">≤ ${p.maxLoad} кг</span>` : `<span style="color:#c9c4b4">—</span>`
+    const holesTxt = holes ? `<span class="holes-cell" title="Открыть карточку с нумерованной разметкой отверстий">🕳 ${holes} отв.</span>` : `<span style="color:#c9c4b4">—</span>`
     tr.innerHTML=`<td>${idx++}</td>
       <td><b>${p.name}</b><div style="font-size:11px;color:#64748b">${p.note||''}</div></td>
       <td>${p.material}</td>
@@ -974,12 +1010,14 @@ function renderParts(){
       <td><span class="badge-count">${p.count}</span></td>
       <td style="font-size:11px">${p.edge||'-'}</td>
       <td class="mono">${totalArea} м²</td>
+      <td class="mono">${loadTxt}</td>
+      <td class="mono">${holesTxt}</td>
       <td class="part-open-cell">${key? '<button class="part-open-btn" title="Карточка детали: позиция, развёртка, крепёж">📋</button>' : ''}</td>`
     if(key){
       tr.dataset.key = key
       tr.classList.add('row-clickable')
       tr.addEventListener('click', e=>{
-        if(e.target.closest('.part-open-btn')) openPartCard(key)
+        if(e.target.closest('.part-open-btn') || e.target.closest('.holes-cell')) openPartCard(key)
         else selectPart(key)
       })
     }
