@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#1e3a2f" />
+    <title>Construction — Конструктор раскроя</title>
+    <link rel="manifest" href="manifest.json" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%231e3a2f'/><path d='M20 70 L20 20 L50 20 L80 35 L80 70 Z' fill='none' stroke='%23f2c14e' stroke-width='6' stroke-linejoin='round'/><path d='M20 35 L50 35 L50 70' stroke='%23f2c14e' stroke-width='3' opacity='0.7'/><path d='M50 20 L50 35 L80 35' stroke='%23f2c14e' stroke-width='3' opacity='0.7'/></svg>" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <div id="app">
+      <!-- HEADER -->
+      <header class="header">
+        <div class="header-left">
+          <div class="logo">
+            <svg width="34" height="34" viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="9" fill="#f2c14e"/><path d="M7 22V8l9-3 9 4v13H7Z" stroke="#1e3a2f" stroke-width="1.8" stroke-linejoin="round"/><path d="M7 11h9v11" stroke="#1e3a2f" stroke-width="1.3"/><path d="M16 8v11l9-4" stroke="#1e3a2f" stroke-width="1.3" opacity=".7"/></svg>
+          </div>
+          <div>
+            <div class="header-title">CONSTRUCTION</div>
+            <div class="header-sub">Конструктор мебели • PRO100</div>
+          </div>
+        </div>
+        <div class="header-right">
+          <span class="badge">v1.0 • APK • Offline</span>
+          <button id="btnSave" class="btn btn-ghost" title="Сохранить проект">💾</button>
+          <button id="btnPrint" class="btn btn-ghost" title="Печать">🖨️</button>
+        </div>
+      </header>
+
+      <div class="layout">
+        <!-- LEFT PANEL - CONTROLS -->
+        <aside class="panel panel-left" id="leftPanel">
+          <div class="panel-scroll">
+            <!-- Product type -->
+            <section class="section">
+              <div class="section-label">ТИП ИЗДЕЛИЯ</div>
+              <div class="type-grid" id="typeGrid">
+                <button class="type-card active" data-type="shkaf">
+                  <span class="type-icon">🚪</span>
+                  <span class="type-name">Шкаф</span>
+                  <span class="type-desc">с полками и дверями</span>
+                </button>
+                <button class="type-card" data-type="tumba">
+                  <span class="type-icon">🗄️</span>
+                  <span class="type-name">Тумба</span>
+                  <span class="type-desc">комод / тумбочка</span>
+                </button>
+                <button class="type-card" data-type="stoyka">
+                  <span class="type-icon">📚</span>
+                  <span class="type-name">Стойка</span>
+                  <span class="type-desc">стеллаж открытый</span>
+                </button>
+                <button class="type-card" data-type="stol">
+                  <span class="type-icon">🪑</span>
+                  <span class="type-name">Стол</span>
+                  <span class="type-desc">письменный / обеденный</span>
+                </button>
+                <button class="type-card" data-type="polka">
+                  <span class="type-icon">📐</span>
+                  <span class="type-name">Полка</span>
+                  <span class="type-desc">настенная</span>
+                </button>
+              </div>
+            </section>
+
+            <!-- Dimensions -->
+            <section class="section">
+              <div class="section-label">ГАБАРИТЫ, мм</div>
+              <div class="grid3">
+                <label class="field">
+                  <span>Высота H</span>
+                  <div class="input-wrap">
+                    <input type="number" id="inpH" value="2000" min="200" max="3000" step="10">
+                    <div class="range-wrap"><input type="range" id="rngH" min="300" max="2700" value="2000" step="10"></div>
+                  </div>
+                </label>
+                <label class="field">
+                  <span>Ширина W</span>
+                  <div class="input-wrap">
+                    <input type="number" id="inpW" value="800" min="200" max="3000" step="10">
+                    <div class="range-wrap"><input type="range" id="rngW" min="200" max="2500" value="800" step="10"></div>
+                  </div>
+                </label>
+                <label class="field">
+                  <span>Глубина D</span>
+                  <div class="input-wrap">
+                    <input type="number" id="inpD" value="520" min="150" max="800" step="10">
+                    <div class="range-wrap"><input type="range" id="rngD" min="150" max="800" value="520" step="10"></div>
+                  </div>
+                </label>
+              </div>
+              <div class="hint" id="dimHint">Корпус: 800×2000×520 мм • Объём 0.83 м³</div>
+            </section>
+
+            <!-- Material -->
+            <section class="section">
+              <div class="section-label">МАТЕРИАЛ КОРПУСА</div>
+              <div class="grid2">
+                <label class="field">
+                  <span>Тип материала</span>
+                  <select id="selMaterial">
+                    <option value="ldsp16">ЛДСП 16 мм</option>
+                    <option value="ldsp18">ЛДСП 18 мм</option>
+                    <option value="mdf16">МДФ 16 мм</option>
+                    <option value="mdf18">МДФ 18 мм</option>
+                    <option value="fanera12">Фанера 12 мм</option>
+                    <option value="fanera15">Фанера 15 мм</option>
+                    <option value="fanera18" >Фанера 18 мм</option>
+                    <option value="fanera21">Фанера 21 мм</option>
+                    <option value="osp12">ОСП/OSB 12 мм</option>
+                    <option value="osp15">ОСП 15 мм</option>
+                    <option value="dsp22">ДСП 22 мм</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Толщина t, мм</span>
+                  <input type="number" id="inpT" value="16" min="3" max="40" step="1">
+                </label>
+              </div>
+              <div class="grid2">
+                <label class="field">
+                  <span>Лист Ш × В, мм</span>
+                  <div class="inline-inputs">
+                    <input type="number" id="inpSheetW" value="2800" min="1000" max="3500" step="10">
+                    <span>×</span>
+                    <input type="number" id="inpSheetH" value="2070" min="1000" max="3500" step="10">
+                  </div>
+                </label>
+                <label class="field">
+                  <span>Кромка / Запас</span>
+                  <select id="selEdge">
+                    <option value="0">Без кромки</option>
+                    <option value="0.5">Кромка 0.4 мм (+0.5)</option>
+                    <option value="1" selected>Кромка 1 мм (+1)</option>
+                    <option value="2">Кромка 2 мм (+2)</option>
+                  </select>
+                </label>
+              </div>
+              <div class="material-presets" id="materialPresets">
+                <button data-mat="ldsp16" data-sheet="2800x2070" data-t="16">ЛДСП</button>
+                <button data-mat="fanera18" data-sheet="2500x1250" data-t="18">Фанера</button>
+                <button data-mat="osp12" data-sheet="2500x1250" data-t="12">ОСП</button>
+                <button data-mat="mdf16" data-sheet="2800x2070" data-t="16">МДФ</button>
+                <button data-mat="dsp22" data-sheet="2440x1830" data-t="22">ДСП 22</button>
+              </div>
+              <label class="check"><input type="checkbox" id="chkRear" checked> <span>Задняя стенка ДВП 3.2 мм (в паз / накладная)</span></label>
+              <label class="check"><input type="checkbox" id="chkBase"> <span>Цоколь 80 мм (планка снизу)</span></label>
+            </section>
+
+            <!-- Construction -->
+            <section class="section">
+              <div class="section-label">КОНСТРУКЦИЯ И НАПОЛНЕНИЕ</div>
+              <div class="grid2">
+                <label class="field">
+                  <span>Сборка корпуса</span>
+                  <select id="selConstr">
+                    <option value="inset" selected>Вкладная (крыша/дно между боковин)</option>
+                    <option value="overlay">Накладная (крыша на боковины)</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Крепление полок</span>
+                  <select id="selShelfMount">
+                    <option value="inner" selected>Вкладные (между боковин)</option>
+                    <option value="overlay">Накладные (сверху)</option>
+                  </select>
+                </label>
+              </div>
+              <div class="stepper-grid">
+                <label class="stepper">
+                  <span>Полок (внутренних)</span>
+                  <div class="stepper-ctrl">
+                    <button data-action="dec" data-target="shelves">−</button>
+                    <input type="number" id="inpShelves" value="3" min="0" max="12" readonly>
+                    <button data-action="inc" data-target="shelves">+</button>
+                  </div>
+                </label>
+                <label class="stepper">
+                  <span>Дверей</span>
+                  <div class="stepper-ctrl">
+                    <button data-action="dec" data-target="doors">−</button>
+                    <input type="number" id="inpDoors" value="2" min="0" max="4" readonly>
+                    <button data-action="inc" data-target="doors">+</button>
+                  </div>
+                </label>
+                <label class="stepper">
+                  <span>Ящиков / шуфлядок</span>
+                  <div class="stepper-ctrl">
+                    <button data-action="dec" data-target="drawers">−</button>
+                    <input type="number" id="inpDrawers" value="0" min="0" max="6" readonly>
+                    <button data-action="inc" data-target="drawers">+</button>
+                  </div>
+                </label>
+                <label class="stepper">
+                  <span>Перегородок верт.</span>
+                  <div class="stepper-ctrl">
+                    <button data-action="dec" data-target="partitions">−</button>
+                    <input type="number" id="inpPartitions" value="0" min="0" max="3" readonly>
+                    <button data-action="inc" data-target="partitions">+</button>
+                  </div>
+                </label>
+              </div>
+              <div class="grid2" style="margin-top:10px">
+                <label class="field">
+                  <span>Зазор фасада, мм</span>
+                  <input type="number" id="inpGapFacade" value="3" min="0" max="10" step="1">
+                </label>
+                <label class="field">
+                  <span>Отступ полки от фасада</span>
+                  <input type="number" id="inpShelfInset" value="20" min="0" max="50" step="1">
+                </label>
+              </div>
+              <div class="check-group" id="extraOptions">
+                <!-- dynamic options per type -->
+              </div>
+            </section>
+
+            <section class="section section-action">
+              <button id="btnCalc" class="btn btn-primary">▶ Рассчитать раскрой</button>
+              <div class="action-hint">Авто-пересчёт при изменении • Сохраняет последнюю конфигурацию</div>
+            </section>
+
+            <section class="section summary-mini" id="summaryMini">
+              <!-- filled by JS -->
+            </section>
+          </div>
+        </aside>
+
+        <!-- CENTER + RIGHT -->
+        <main class="main">
+          <div class="tabs">
+            <button class="tab active" data-tab="assembly">Сборка <span class="tab-badge">3D</span></button>
+            <button class="tab" data-tab="projections">Чертежи <span class="tab-badge">4 вида</span></button>
+            <button class="tab" data-tab="parts">Детали <span class="tab-badge" id="tabPartsCount">—</span></button>
+            <button class="tab" data-tab="cutting">Раскрой <span class="tab-badge" id="tabSheetsCount">—</span></button>
+            <button class="tab" data-tab="estimate">Смекта</button>
+          </div>
+
+          <div class="main-content">
+            <!-- ASSEMBLY TAB -->
+            <div class="tab-panel active" id="panel-assembly">
+              <div class="canvas-toolbar">
+                <div class="toolbar-left">
+                  <span class="view-label">Эскиз изделия в сборе</span>
+                  <span class="view-dims" id="viewDims">800 × 2000 × 520</span>
+                </div>
+                <div class="toolbar-right">
+                  <button class="btn btn-small" id="btnRotate" title="Повернуть">⟲ Поворот</button>
+                  <button class="btn btn-small" id="btnExplode" title="Разнести">✧ В разнос</button>
+                  <select id="selView" class="select-small">
+                    <option value="iso" selected>Изометрия</option>
+                    <option value="front">Фасад</option>
+                    <option value="side">Сбоку</option>
+                  </select>
+                </div>
+              </div>
+              <div class="canvas-wrap" id="assemblyCanvas">
+                <!-- SVG injected -->
+              </div>
+              <div class="canvas-legend" id="assemblyLegend"></div>
+            </div>
+
+            <!-- PROJECTIONS TAB -->
+            <div class="tab-panel" id="panel-projections">
+              <div class="projections-grid" id="projectionsGrid">
+                <!-- 4 SVGs -->
+              </div>
+            </div>
+
+            <!-- PARTS TAB -->
+            <div class="tab-panel" id="panel-parts">
+              <div class="parts-toolbar">
+                <div class="parts-stats" id="partsStats"></div>
+                <div class="parts-actions">
+                  <button class="btn btn-small" id="btnExportCSV">⬇ CSV</button>
+                  <button class="btn btn-small" id="btnExportPDF">⬇ PDF</button>
+                  <button class="btn btn-small" id="btnCopyList">⎘ Копировать</button>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table class="parts-table" id="partsTable">
+                  <thead><tr><th>№</th><th>Деталь</th><th>Материал</th><th>Размер (Ш×В)</th><th>Толщ.</th><th>Кол-во</th><th>Кромка</th><th>Площадь</th></tr></thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+              <div class="parts-sketches" id="partsSketches"></div>
+            </div>
+
+            <!-- CUTTING TAB -->
+            <div class="tab-panel" id="panel-cutting">
+              <div class="cutting-summary" id="cuttingSummary"></div>
+              <div class="sheets-container" id="sheetsContainer"></div>
+              <div class="cutting-tips">
+                <b>Подсказка:</b> Красная пунктирная линия — рез. Размеры указаны с учётом кромки и зазоров. Припуск на пропил 3 мм заложен автоматически.
+                <br>Для оптимизации раскроя детали отсортированы по убыванию размера. Используйте <b>поворот</b> деталей на 90° если волокна не критичны.
+              </div>
+            </div>
+
+            <!-- ESTIMATE TAB -->
+            <div class="tab-panel" id="panel-estimate">
+              <div class="estimate-grid" id="estimateGrid"></div>
+            </div>
+          </div>
+        </main>
+      </div>
+
+      <!-- MOBILE BOTTOM NAV -->
+      <nav class="mobile-nav">
+        <button class="mnav-btn active" data-tab="assembly">🏠 Сборка</button>
+        <button class="mnav-btn" data-tab="projections">📐 Чертёж</button>
+        <button class="mnav-btn" data-tab="parts">📋 Детали</button>
+        <button class="mnav-btn" data-tab="cutting">✂ Раскрой</button>
+      </nav>
+    </div>
+
+    <div id="toast" class="toast"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

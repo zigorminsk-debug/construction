@@ -1,0 +1,179 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ "arena/01a0bd60-construction", "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Setup Android SDK
+        run: |
+          echo "Checking Android SDK..."
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          ls -lh $ANDROID_HOME 2>&1 | head -40 || ls -lh /usr/local/lib/android/sdk 2>&1 | head -40
+          if [ -z "$ANDROID_HOME" ]; then
+            export ANDROID_HOME=/usr/local/lib/android/sdk
+            echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          fi
+          if [ -z "$ANDROID_SDK_ROOT" ]; then
+            echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
+          fi
+          # Accept licenses and install required platforms
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>&1 | tail -20 || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-34" "build-tools;34.0.0" "platform-tools" 2>&1 | tail -30 || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --list_installed 2>&1 | head -60 || true
+          echo "SDK setup done"
+
+      - name: Install dependencies
+        run: npm ci || npm install
+
+      - name: Build web app (Vite)
+        run: npm run build
+
+      - name: Sync web assets to Android
+        run: |
+          echo "Syncing dist -> android assets"
+          rm -rf android/app/src/main/assets/www
+          mkdir -p android/app/src/main/assets/www
+          cp -r dist/* android/app/src/main/assets/www/
+          ls -lh android/app/src/main/assets/www/
+          echo "Assets synced"
+
+      - name: Setup Gradle 8.7
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.7
+
+      - name: Ensure Gradle wrapper
+        run: |
+          ls -lh android/gradle/wrapper/ || true
+          cat android/gradle/wrapper/gradle-wrapper.properties || true
+          # Try to download wrapper jar via multiple mirrors, fallback to generating via installed gradle
+          if [ ! -s android/gradle/wrapper/gradle-wrapper.jar ]; then
+            echo "Wrapper jar missing or empty, attempting download..."
+            mkdir -p android/gradle/wrapper
+            curl -L --retry 3 -o android/gradle/wrapper/gradle-wrapper.jar https://services.gradle.org/distributions/gradle-wrapper-8.7.jar 2>&1 | tail -20 || true
+            if [ ! -s android/gradle/wrapper/gradle-wrapper.jar ]; then
+              curl -L --retry 3 -o android/gradle/wrapper/gradle-wrapper.jar https://repo.maven.apache.org/maven2/org/gradle/gradle-wrapper/8.7/gradle-wrapper-8.7.jar 2>&1 | tail -20 || true
+            fi
+            ls -lh android/gradle/wrapper/gradle-wrapper.jar || echo "download failed"
+          fi
+          if [ ! -s android/gradle/wrapper/gradle-wrapper.jar ]; then
+            echo "Generating wrapper via installed gradle..."
+            gradle --version 2>&1 | head -20 || true
+            (cd android && gradle wrapper --gradle-version 8.7 2>&1 | tail -20 || true)
+            ls -lh android/gradle/wrapper/gradle-wrapper.jar || echo "still missing"
+          fi
+          chmod +x android/gradlew || true
+          ls -lh android/gradlew 2>&1 | head -20 || true
+          ls -lh android/gradle/wrapper/ 2>&1 | head -20 || true
+
+      - name: Show Gradle version
+        working-directory: android
+        run: |
+          ./gradlew --version 2>&1 | head -60 || true
+          gradle --version 2>&1 | head -60 || true
+
+      - name: Build Debug APK
+        working-directory: android
+        run: |
+          echo "Using gradle directly (bypass wrapper)..."
+          gradle --version 2>&1 | head -20 || true
+          # Ensure wrapper is valid or generate it, but build with gradle directly
+          gradle assembleDebug --stacktrace 2>&1 | tee /tmp/gradle.log; exit ${PIPESTATUS[0]}
+
+      - name: Dump gradle log to summary
+        if: always()
+        run: |
+          echo "### Gradle log tail" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          tail -n 200 /tmp/gradle.log 2>&1 | head -c 15000 >> $GITHUB_STEP_SUMMARY || echo "no log" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "### Wrapper check" >> $GITHUB_STEP_SUMMARY
+          ls -lh android/gradle/wrapper/ >> $GITHUB_STEP_SUMMARY 2>&1 || true
+          echo "### SDK check" >> $GITHUB_STEP_SUMMARY
+          ls -lh $ANDROID_HOME/platforms 2>&1 | head -20 >> $GITHUB_STEP_SUMMARY || true
+          cat /tmp/gradle.log 2>&1 | tail -n 300 || true
+
+      - name: Comment gradle log on commit (for sandbox debug)
+        if: always()
+        run: |
+          LOG_TAIL=$(tail -n 120 /tmp/gradle.log 2>&1 | head -c 60000 || echo "no log file")
+          # Escape for JSON
+          BODY=$(printf "Gradle log tail for run %s\n\`\`\`\n%s\n\`\`\`" "${{ github.run_id }}" "$LOG_TAIL")
+          echo "$BODY" > /tmp/body.txt
+          gh api repos/${{ github.repository }}/commits/${{ github.sha }}/comments -f body="$(cat /tmp/body.txt)" 2>&1 | head -20 || echo "comment failed"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Release APK (unsigned)
+        working-directory: android
+        run: |
+          gradle assembleRelease --stacktrace 2>&1 | tee /tmp/gradle-release.log; echo "release exit code ${PIPESTATUS[0]}" || true
+
+      - name: Upload Gradle logs (on failure)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-logs
+          path: |
+            /tmp/gradle*.log
+            android/app/build/outputs/
+            android/build/
+          if-no-files-found: warn
+
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: construction-debug-apk
+          path: |
+            android/app/build/outputs/apk/debug/*.apk
+            android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: warn
+
+      - name: Create GitHub Release (on main push)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: Construction v1.0.${{ github.run_number }}
+          body: |
+            Автоматическая сборка APK
+            - Конструктор мебели PRO100
+            - Расчёт раскроя ДСП/Фанера/ОСП/МДФ
+            - Эскизы + карты раскроя + смета
+            Скачайте `app-debug.apk` и установите на Android (разрешите установку из неизвестных источников).
+          files: |
+            android/app/build/outputs/apk/debug/*.apk
+            android/app/build/outputs/apk/release/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Print APK info
+        run: |
+          ls -lh android/app/build/outputs/apk/debug/ || true
+          ls -lh android/app/build/outputs/apk/release/ || true

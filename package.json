@@ -1,0 +1,14 @@
+{
+  "name": "construction-cutting",
+  "version": "1.0.0",
+  "description": "Конструктор мебели - расчет раскроя листового материала (аналог PRO100)",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 4173"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  }
+}
