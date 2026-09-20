@@ -3,6 +3,40 @@ plugins {
     id 'org.jetbrains.kotlin.android'
 }
 
+// ============================================================
+// ПОДПИСЬ APK — ПЕРМАНЕНТНЫЙ КЛЮЧ
+// ============================================================
+// Ключ лежит в репозитории: android/keystore/construction-release.p12
+//   alias:     construction
+//   password:  construction-key-2026
+// Действителен до 2054 года.
+//
+// ВАЖНО: НЕ заменять и НЕ пересоздавать ключ! Иначе приложение
+// нельзя будет обновить поверх уже установленного (нужна будет
+// переустановка). Любые другие агенты/сборки подписывают APK
+// ТОЛЬКО этим ключом (см. android/keystore/README.md).
+//
+// Переопределение из CI/окружения (необязательно):
+//   -PsignStoreFile / -PsignStorePass / -PsignKeyAlias / -PsignKeyPass
+//   или env: CONSTRUCTION_KEY_FILE / CONSTRUCTION_KEY_PASS / CONSTRUCTION_KEY_ALIAS
+// ============================================================
+
+def defaultKeyFile = rootProject.file('keystore/construction-release.p12')
+def defaultKeyPass = 'construction-key-2026'
+def defaultKeyAlias = 'construction'
+
+def signStoreFile = project.hasProperty('signStoreFile') ? project.property('signStoreFile') : (System.getenv('CONSTRUCTION_KEY_FILE') ?: defaultKeyFile)
+def signStorePass = project.hasProperty('signStorePass') ? project.property('signStorePass') : (System.getenv('CONSTRUCTION_KEY_PASS') ?: defaultKeyPass)
+def signKeyAlias  = project.hasProperty('signKeyAlias') ? project.property('signKeyAlias') : (System.getenv('CONSTRUCTION_KEY_ALIAS') ?: defaultKeyAlias)
+def signKeyPass   = project.hasProperty('signKeyPass') ? project.property('signKeyPass') : signStorePass
+
+def storeFileObj = signStoreFile instanceof File ? signStoreFile : file(signStoreFile)
+
+// versionCode — из CI (номер запуска сборки): -PciVersionCode=123
+// Чем больше versionCode, тем "свежее" APK — обновление ставится поверх.
+def ciVersionCode = project.hasProperty('ciVersionCode') ? project.property('ciVersionCode').toInteger() : 1
+def ciVersionName = project.hasProperty('ciVersionName') ? project.property('ciVersionName') : "1.0.${ciVersionCode}"
+
 android {
     namespace 'com.construction.app'
     compileSdk 34
@@ -11,18 +45,33 @@ android {
         applicationId "com.construction.app"
         minSdk 24
         targetSdk 34
-        versionCode 1
-        versionName "1.0.0"
+        versionCode ciVersionCode
+        versionName ciVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        // Один и тот же перманентный ключ для release и debug,
+        // чтобы ЛЮБАЯ собранная версия обновлялась поверх установленной.
+        permanent {
+            storeFile storeFileObj
+            storeType 'pkcs12'
+            storePassword signStorePass
+            keyAlias signKeyAlias
+            keyPassword signKeyPass
+        }
     }
 
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.permanent
+            outputFileName = "construction-v${ciVersionName}.apk"
         }
         debug {
             debuggable true
+            signingConfig signingConfigs.permanent
         }
     }
     compileOptions {

@@ -34,10 +34,17 @@
 #### Скачать APK
 
 1. Открой вкладку **Actions** в репозитории → выбери последний успешный `Build APK`
-2. Скачай артефакт `construction-debug-apk` → внутри `app-debug.apk`
+2. Скачай артефакт `construction-release-apk` → внутри `construction-v1.0.X.apk` (подписанный, рекомендуемый)
+   или `construction-debug-apk` → `app-debug.apk`
 3. На телефоне разреши «Установку из неизвестных источников» и установи
 
-> При пуше в `main` создаётся **Release** с прикреплённым APK (тэг `v1.0.<run_number>`).
+> При пуше в `main` создаётся **Release** с прикреплёнными APK (тэг `v1.0.<run_number>`).
+>
+> ✅ Все сборки подписаны **перманентным ключом** из репозитория, а `versionCode` растёт с каждым запуском CI —
+> новое APK **устанавливается поверх** уже установленного (просто перезапустите установку).
+>
+> ⚠️ **Один раз** пользователям старых сборок (до введения перманентного ключа) придётся
+> **удалить старое приложение** и поставить новое — оно было подписано другим (автогенерируемым) ключом.
 
 #### Собрать локально
 
@@ -50,11 +57,74 @@ rm -rf android/app/src/main/assets/www
 mkdir -p android/app/src/main/assets/www
 cp -r dist/* android/app/src/main/assets/www/
 
+# Собрать иконки (PWA + Android mipmap) — из выбранного варианта
+node scripts/make-icons.js
+
 # Собрать APK (требует JDK 17 + Android SDK)
 cd android
 ./gradlew assembleDebug
 # APK: android/app/build/outputs/apk/debug/app-debug.apk
 ```
+
+---
+
+### 🔑 Подпись APK (перманентный ключ)
+
+Все сборки — **debug и release, CI и локальные** — подписываются ОДНИМ и тем же
+перманентным ключом, который лежит в репозитории:
+
+| Параметр | Значение |
+|---|---|
+| Файл | `android/keystore/construction-release.p12` (PKCS#12) |
+| Alias | `construction` |
+| Пароль | `construction-key-2026` |
+| Действителен до | **2054-02-05** |
+| SHA-256 отпечаток | `D0:E2:78:…:3E:4A` (полный — в `android/keystore/cert-sha256.txt`) |
+
+Почему так: Android обновляет приложение **только по тому же сертификату**.
+Ключ один на всех (любой агент, любая сборка) + растущий `versionCode`
+(`-PciVersionCode=<номер запуска CI>`) = обновление «поверх» установленного.
+
+**Правила (и для агентов):**
+- ❌ Никогда не генерировать новый ключ и не использовать автогенерируемый `debug.keystore`
+- ❌ Не менять пароль/alias — только `-PciVersionCode` и иконки
+- ✅ Локальная release-сборка: `./gradlew assembleRelease -PciVersionCode=NNN`
+  (NNN — больше, чем у последней опубликованной версии)
+- ✅ Проверка подписи: `apksigner verify --print-certs *.apk` → отпечаток совпадает с `cert-sha256.txt`
+
+Полная документация ключа: [`android/keystore/README.md`](android/keystore/README.md).
+
+---
+
+### 🎨 Иконки приложения (выбор)
+
+Есть **6 вариантов** иконки (см. превью: `icons/app/previews/all.png`),
+выбранный один применяется ко всему — PWA, Android-лаунчер (все densities), favicon:
+
+| # | Вариант |
+|---|---|
+| 1 | «Шкаф» — базовый фирменный мотив (текущий) |
+| 2 | «Раскрой» — лист с линиями реза |
+| 3 | «Каркас» — изометрическая рама из профиля |
+| 4 | «Пила» — круглый диск |
+| 5 | «Размеры» — объём с размерными линиями |
+| 6 | «Рулетка» — лента с крючком |
+
+**Как сменить:**
+
+```bash
+# 1. выбрать вариант (1..6) в icons/app/app-icon.json → "selected"
+# 2. перегенерировать все PNG + manifest.json + favicon
+node scripts/make-icons.js
+# 3. закоммитить результат (PNG коммитятся — CI пересобирает их перед build)
+```
+
+Генерируется: `public/icons/icon-{192,512,maskable-512}.png` (PWA) +
+`android/app/src/main/res/mipmap-*/ic_launcher{,_round}.png` (48–192 px) +
+`manifest.json` (any + maskable) + favicon в `index.html`.
+
+Новый вариант: добавить `icons/app/icon-N.svg` (холст 512×512, арт внутри
+`<g id="art">`, фон добавляет скрипт) и строку в `options` в `app-icon.json`.
 
 ---
 
@@ -118,6 +188,9 @@ npm run preview  # preview на :4173
 │   ├── draw.js         # SVG эскизы / раскрой / развёртки с отверстиями
 │   └── style.css       # дизайн
 ├── android/            # Gradle + WebView (загружает file:///android_asset/www)
+│   └── keystore/       # 🔑 перманентный ключ подписи APK (НЕ трогать!)
+├── icons/app/          # 🎨 варианты иконок SVG + app-icon.json (выбор)
+├── scripts/make-icons.js  # генератор PNG-иконок (PWA + mipmap + manifest + favicon)
 ├── .github/workflows/build-apk.yml  # CI → APK
 └── vite.config.js
 ```
@@ -126,15 +199,18 @@ npm run preview  # preview на :4173
 
 ### 🔧 GitHub Actions — как работает «Автоматически создавай APK»
 
-Workflow `.github/workflows/build-apk.yml` триггерится на `push` в `main` / `arena/*` и на `workflow_dispatch`:
+Workflow `.github/workflows/build-apk.yml` триггерится на `push` в `main` и на `workflow_dispatch`:
 
-1. `setup-node` → `npm ci` → `npm run build` (Vite)
+1. `setup-node` → `npm ci` → **`node scripts/make-icons.js`** (иконки из `icons/app/app-icon.json`) → `npm run build` (Vite)
 2. копирует `dist/*` → `android/app/src/main/assets/www/`
-3. `setup-java 17` + `setup-android` → `gradlew assembleDebug` (и `assembleRelease`)
-4. загружает APK в **Artifacts**
-5. при пуше в `main` создаёт **Release** с APK
+3. `setup-java 17` + `setup-android` → `gradle assembleDebug` и `assembleRelease`
+   — обе подписаны перманентным ключом из `android/keystore/`,
+   `versionCode = github.run_number` (растёт → обновление «поверх»)
+4. `apksigner verify` — проверка, что подпись совпадает с `android/keystore/cert-sha256.txt`
+5. APK в **Artifacts** (`construction-release-apk`, `construction-debug-apk`)
+6. при пуше в `main` создаёт **Release** с обоими APK (тэг `v1.0.<run_number>`)
 
-Никаких секретов не требуется — используется `GITHUB_TOKEN`.
+Никаких секретов не требуется — ключ лежит в репозитории, используется `GITHUB_TOKEN`.
 
 ---
 
