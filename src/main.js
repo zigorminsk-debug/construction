@@ -167,9 +167,9 @@ function bindUI(){
 
   // export
   $('#btnExportCSV').addEventListener('click', exportCSV)
-  $('#btnExportPDF').addEventListener('click', ()=>window.print())
+  $('#btnExportPDF').addEventListener('click', doPrint)
   $('#btnCopyList').addEventListener('click', copyList)
-  $('#btnPrint').addEventListener('click', ()=>window.print())
+  $('#btnPrint').addEventListener('click', doPrint)
   $('#btnSave').addEventListener('click', ()=>{
     localStorage.setItem('construction_project', JSON.stringify({state, result:lastResult}))
     toast('Проект сохранён в браузере')
@@ -977,7 +977,7 @@ function renderEstimate(){
       <div class="est-row" style="color:#fff;border-color:rgba(255,255,255,.2)"><span>Работа</span><b>${(sheets*6 + lastResult.edgeM*0.8 + 11 + (hasMetal? lastPack.metalTotals.meters*2 + 12 : 0)).toFixed(1)} $</b></div>
       <div style="background:#f2c14e;color:#1e3a2f;border-radius:12px;padding:14px;display:flex;justify-content:space-between;align-items:center;margin-top:10px"><span style="font-weight:800">ВСЕГО</span><strong style="font-size:22px">${(matTotal + fittings.reduce((s,f)=>s+f.cost,0) + sheets*6 + lastResult.edgeM*0.8 + 11 + (hasMetal? lastPack.metalTotals.meters*2 + 12 : 0)).toFixed(1)} $</strong></div>
       <div style="margin-top:10px;font-size:11px;opacity:.8">Расчёт ориентировочный • Цены на ${new Date().toLocaleDateString('ru-RU')} • Курс уточняйте у поставщика</div>
-      <button class="btn btn-primary" style="margin-top:12px;background:#f2c14e;color:#1e3a2f" onclick="window.print()">🖨️ Печать сметы и чертежей</button>
+      <button class="btn btn-primary" style="margin-top:12px;background:#f2c14e;color:#1e3a2f" onclick="doPrint()">🖨️ Печать сметы и чертежей</button>
     </div>
   `
 }
@@ -1051,6 +1051,16 @@ function switchTab(name){
     // trigger resize?
   }
 }
+
+function doPrint(){
+  // APK (WebView): window.print() без нативного хука молчит —
+  // вызываем мост ConstructionAndroid.print() (printToPdf → системный диалог).
+  if(window.ConstructionAndroid && typeof window.ConstructionAndroid.print === 'function'){
+    try{ window.ConstructionAndroid.print(); return }catch(e){/* fall through */}
+  }
+  window.print()
+}
+window.doPrint = doPrint // для inline onclick в разметке
 
 function exportCSV(){
   let csv='№;Деталь;Материал;Ширина,мм;Высота,мм;Толщина,мм;Кол-во;Кромка;Площадь м2;Примечание\n'
