@@ -81,10 +81,19 @@ class MainActivity : AppCompatActivity() {
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        if (webView.canGoBack()) {
-            webView.goBack()
-        } else {
-            super.onBackPressed()
+        // Сначала просим приложение закрыть открытые оверлеи
+        // (полноэкранный зум, карточку детали) — window.__onBackKey()
+        webView.evaluateJavascript(
+            "window.__onBackKey ? window.__onBackKey() : 'none'"
+        ) { result ->
+            runOnUiThread {
+                if (result == "\"handled\"") return@runOnUiThread
+                if (webView.canGoBack()) {
+                    webView.goBack()
+                } else {
+                    super.onBackPressed()
+                }
+            }
         }
     }
 }

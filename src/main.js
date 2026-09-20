@@ -224,10 +224,14 @@ function bindUI(){
     renderAssembly()
   })
 
-  // клик по детали в сборке
+  // клик по детали в сборке; тап по ПУСТОМУ месту — полный экран (жесты)
   $('#assemblyCanvas').addEventListener('click', e=>{
     const el = e.target.closest('[data-key]')
-    if(!el) return
+    if(!el){
+      const svg = $('#assemblyCanvas svg')
+      if(svg) openZoomViewer(svg, 'Эскиз изделия в сборе')
+      return
+    }
     const key = el.dataset.key
     resolveKey(key).then(item=>{
       if(!item) return
@@ -524,6 +528,7 @@ function openZoomViewer(svgEl, title){
   const svg = svgEl.cloneNode(true)
   svg.removeAttribute('width')
   svg.removeAttribute('height')
+  svg.style.maxHeight = 'none' // убрать ограничение в 460px со вставки
   ZOOM.box.appendChild(svg)
   ZOOM.ov.querySelector('.zoom-title').textContent = title
   ZOOM.state.S = 1; ZOOM.state.tx = 0; ZOOM.state.ty = 0
@@ -541,6 +546,16 @@ function makeZoomable(el, title){
     const svg = el.querySelector('svg')
     if(svg) openZoomViewer(svg, title)
   })
+}
+
+// Android: системная кнопка «назад» сначала закрывает оверлеи
+// (полноэкранный зум, карточку детали), а не приложение
+window.__onBackKey = ()=>{
+  const z = document.getElementById('zoomOverlay')
+  if(z && z.classList.contains('open')){ closeZoomViewer(); return 'handled' }
+  const pm = document.getElementById('partModal')
+  if(pm && pm.classList.contains('open')){ closePartCard(); return 'handled' }
+  return 'none'
 }
 
 function openPartCard(key){
@@ -841,6 +856,9 @@ function renderJoints(){
 
 function renderAssembly(){
   const el=$('#assemblyCanvas')
+  // «Поворот» действует только в изометрии
+  const rotBtn=$('#btnRotate')
+  if(rotBtn) rotBtn.style.opacity = state.viewMode==='iso' ? '' : '0.45'
   const params = {...state, materialLabel:getMaterial(state.materialKey, state.t).label, _profile: lastResult.params._profile, _frameProfile: lastResult.params._frameProfile}
   drawAssembly(el, lastLayout, params, state.viewMode, state.exploded, selectedKey, state.showFasteners)
   // legend

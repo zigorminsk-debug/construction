@@ -6,6 +6,32 @@
  * - Карта раскроя
  */
 
+// ==================== Поворот изделия (90° вокруг вертикали) ====================
+/** Вращение точки вокруг вертикальной оси: rot 0..3 */
+function rotPoint(W, D, rot, x, y, z){
+  switch(((rot % 4) + 4) % 4){
+    case 1: return [z, y, W - x]
+    case 2: return [W - x, y, D - z]
+    case 3: return [D - z, y, x]
+    default: return [x, y, z]
+  }
+}
+/** Изометрическая проекция с учётом поворота */
+function makeIso(W, H, D, rot, cx, cy){
+  const r = ((rot % 4) + 4) % 4
+  const Wenv = r % 2 === 0 ? W : D
+  const Denv = r % 2 === 0 ? D : W
+  const scale = Math.min(260 / Wenv, 220 / H, 260 / Denv) * 0.85
+  const cos30 = Math.cos(30*Math.PI/180), sin30 = Math.sin(30*Math.PI/180)
+  return {
+    rot: r,
+    iso: (x, y, z)=>{
+      const [rx, ry, rz] = rotPoint(W, D, r, x, y, z)
+      return { X: cx + (rx - rz)*cos30*scale, Y: cy + (rx + rz)*sin30*scale - ry*scale }
+    }
+  }
+}
+
 /**
  * model = { items, ghosts, joints, metal } — из joinery.buildLayout()
  */
@@ -54,10 +80,7 @@ export function drawAssembly(container, model, params, mode='iso', exploded=fals
     drawIso(svg, W,H,D,t, parts, params, exploded, model, selectedKey, showFasteners)
     // каркас из профтрубы (гибрид корпус+рамa): стойки и рамы поверх схематичной изометрии
     if(params.metalFrame && model){
-      const cos30 = Math.cos(30*Math.PI/180), sin30 = Math.sin(30*Math.PI/180)
-      const scale = Math.min(260 / W, 220 / H, 260 / D) * 0.85
-      const cx2=320, cy2=300
-      const iso2 = (x,y,z)=>({ X: cx2 + (x - z)*cos30*scale, Y: cy2 + (x + z)*sin30*scale - y*scale })
+      const { iso: iso2 } = makeIso(W, H, D, params.rotate || 0, 320, 300)
       const f = (pts, fill, stroke, sw, opacity, key)=>{
         const d = pts.map((p,i)=> `${i===0?'M':'L'} ${p.X} ${p.Y}`).join(' ') + ' Z'
         const el = g('path',{d, fill, stroke, 'stroke-width': sw, opacity})
@@ -97,12 +120,7 @@ function isoBoxCorners(iso, x0,y0,z0, x1,y1,z1){
 
 function drawIsoMetal(svg, g, model, params, exploded, selectedKey, showFasteners){
   const W = params.W, H = params.H, D = params.D
-  const cos30 = Math.cos(30*Math.PI/180), sin30 = Math.sin(30*Math.PI/180)
-  const scale = Math.min(260 / W, 220 / H, 260 / D) * 0.85
-  const cx=320, cy=300
-  function iso(x,y,z){
-    return { X: cx + (x - z)*cos30*scale, Y: cy + (x + z)*sin30*scale - y*scale }
-  }
+  const { iso, rot } = makeIso(W, H, D, params.rotate || 0, 320, 300)
   function face(pts, fill, stroke, sw=1, opacity=1, extra={}){
     const d = pts.map((p,i)=> `${i===0?'M':'L'} ${p.X} ${p.Y}`).join(' ') + ' Z'
     const el=g('path',{d,fill,stroke,'stroke-width':sw,opacity,...extra})
@@ -113,10 +131,12 @@ function drawIsoMetal(svg, g, model, params, exploded, selectedKey, showFastener
   const exp = exploded ? 14 : 0
   // разнес: полки/рамы выше — смещаем по уровню y
   const all = [...(model.ghosts||[]), ...model.items]
+  // сортировка отрисовки по ПОВЁРНУТЫМ координатам (чтобы ближние рисовались поверх)
+  const rc = (it)=> rotPoint(W, D, rot, it.x + it.w/2, 0, it.z + it.d/2)
   const sorted = all.slice().sort((a,b)=>{
-    const za = (a.z + a.d/2), zb = (b.z + b.d/2)
-    if(Math.abs(za-zb) > 1) return zb - za          // дальние (задние) сначала
-    if(Math.abs((a.x+a.w/2)-(b.x+b.w/2)) > 1) return (a.x+a.w/2) - (b.x+b.w/2) // левые сначала
+    const ca = rc(a), cb = rc(b)
+    if(Math.abs(ca[2]-cb[2]) > 1) return cb[2] - ca[2]          // дальние (задние) сначала
+    if(Math.abs(ca[0]-cb[0]) > 1) return ca[0] - cb[0]          // левые сначала
     return (a.y+a.h/2) - (b.y+b.h/2)
   })
 
@@ -321,22 +341,9 @@ function drawIso(svg, W,H,D,t, parts, params, exploded, model=null, selectedKey=
   const svgNS='http://www.w3.org/2000/svg'
   const g=(tag,a={})=>{const e=document.createElementNS(svgNS,tag);for(const k in a)e.setAttribute(k,a[k]);return e}
 
-  // изометрическая проекция: используем диметрию 30°
-  const scale = Math.min(260 / W, 220 / H, 260 / D) * 0.85
-  const cx=320, cy=300
-
-  // углы для изометрии
-  const cos30 = Math.cos(30*Math.PI/180) // 0.866
-  const sin30 = Math.sin(30*Math.PI/180) // 0.5
-
-  // 3D box corners: (x,y,z) -> (X,Y) iso: X = cx + (x - z)*cos30*scale , Y = cy + (x+z)*sin30*scale - y*scale
-  // где x = ширина (W), z = глубина (D), y = высота (H) вверх
-  function iso(x,y,z){
-    return {
-      X: cx + (x - z)*cos30*scale,
-      Y: cy + (x + z)*sin30*scale - y*scale
-    }
-  }
+  // изометрическая проекция (диметрия 30°) с учётом поворота:
+  // x = ширина (W), z = глубина (D), y = высота (H) вверх
+  const { iso } = makeIso(W, H, D, params.rotate || 0, 320, 300)
 
   const exp = exploded ? 18 : 0
 
