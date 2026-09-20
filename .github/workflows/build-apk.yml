@@ -105,6 +105,30 @@ jobs:
         working-directory: android
         run: ./gradlew assembleDebug --stacktrace 2>&1 | tee /tmp/gradle.log; exit ${PIPESTATUS[0]}
 
+      - name: Dump gradle log to summary
+        if: always()
+        run: |
+          echo "### Gradle log tail" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          tail -n 200 /tmp/gradle.log 2>&1 | head -c 15000 >> $GITHUB_STEP_SUMMARY || echo "no log" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "### Wrapper check" >> $GITHUB_STEP_SUMMARY
+          ls -lh android/gradle/wrapper/ >> $GITHUB_STEP_SUMMARY 2>&1 || true
+          echo "### SDK check" >> $GITHUB_STEP_SUMMARY
+          ls -lh $ANDROID_HOME/platforms 2>&1 | head -20 >> $GITHUB_STEP_SUMMARY || true
+          cat /tmp/gradle.log 2>&1 | tail -n 300 || true
+
+      - name: Comment gradle log on commit (for sandbox debug)
+        if: always()
+        run: |
+          LOG_TAIL=$(tail -n 120 /tmp/gradle.log 2>&1 | head -c 60000 || echo "no log file")
+          # Escape for JSON
+          BODY=$(printf "Gradle log tail for run %s\n\`\`\`\n%s\n\`\`\`" "${{ github.run_id }}" "$LOG_TAIL")
+          echo "$BODY" > /tmp/body.txt
+          gh api repos/${{ github.repository }}/commits/${{ github.sha }}/comments -f body="$(cat /tmp/body.txt)" 2>&1 | head -20 || echo "comment failed"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build Release APK (unsigned)
         working-directory: android
         run: ./gradlew assembleRelease --stacktrace 2>&1 | tee /tmp/gradle-release.log; echo "release exit code ${PIPESTATUS[0]}" || true
