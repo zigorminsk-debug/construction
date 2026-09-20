@@ -52,6 +52,25 @@ export function drawAssembly(container, model, params, mode='iso', exploded=fals
     drawSide(svg, W,H,D,t, parts, params)
   }else{
     drawIso(svg, W,H,D,t, parts, params, exploded, model, selectedKey, showFasteners)
+    // каркас из профтрубы (гибрид корпус+рамa): стойки и рамы поверх схематичной изометрии
+    if(params.metalFrame && model){
+      const cos30 = Math.cos(30*Math.PI/180), sin30 = Math.sin(30*Math.PI/180)
+      const scale = Math.min(260 / W, 220 / H, 260 / D) * 0.85
+      const cx2=320, cy2=300
+      const iso2 = (x,y,z)=>({ X: cx2 + (x - z)*cos30*scale, Y: cy2 + (x + z)*sin30*scale - y*scale })
+      const f = (pts, fill, stroke, sw, opacity, key)=>{
+        const d = pts.map((p,i)=> `${i===0?'M':'L'} ${p.X} ${p.Y}`).join(' ') + ' Z'
+        const el = g('path',{d, fill, stroke, 'stroke-width': sw, opacity})
+        if(key){ el.setAttribute('data-key', key); el.setAttribute('class','asm-click'); el.style.cursor='pointer' }
+        svg.appendChild(el)
+      }
+      model.items.filter(it=> it.metal).forEach(it=>{
+        const c = isoBoxCorners(iso2, it.x, it.y, it.z, it.x+it.w, it.y+it.h, it.z+it.d)
+        f([c.front[0],c.front[1],c.front[2],c.front[3]], '#c3ced9', '#475569', 1, 0.96, it.key)
+        f([c.right[0],c.right[1],c.right[2],c.right[3]], '#9fb0bf', '#475569', 1, 0.96, it.key)
+        f([c.top[0],c.top[1],c.top[2],c.top[3]], '#dbe2ea', '#475569', 1, 0.96, it.key)
+      })
+    }
   }
 
   // подпись
@@ -978,6 +997,28 @@ export function drawPartFlat(container, item, params){
   const cap = g('text',{x:10,y:14,'font-size':8,'font-weight':800,fill:'#64748b','letter-spacing':'0.08em'})
   cap.textContent = isMetal ? 'РАЗВЁРТКА ПРОФИЛЯ • ФАСКА' : 'РАЗВЁРТКА ДЕТАЛИ • ГРАНЬ + ТОРЦЫ'
   svg.appendChild(cap)
+
+  // ---- узел стыковки (деталь разрезана под лист) ----
+  const si = item.part && item.part.splitInfo
+  if(si){
+    const red = '#ef4444'
+    const jc = `СТЫК: сегмент ${si.index + 1} из ${si.total} • цельная ${si.origW}×${si.origH} • шканты + саморез`
+    let ln, tx, ty, anchor = 'middle'
+    if(si.longAxis === 'h'){
+      const yEdge = si.index > 0 ? y0 + hS : y0
+      ln = { x1: x0 - 8, y1: yEdge, x2: x0 + wS + 8, y2: yEdge }
+      tx = x0 + wS / 2
+      ty = si.index > 0 ? y0 + hS + tS + 26 : y0 - tS - 8
+    } else {
+      const xEdge = si.index > 0 ? x0 : x0 + wS
+      ln = { x1: xEdge, y1: y0 - 8, x2: xEdge, y2: y0 + hS + 8 }
+      tx = x0 + 4; ty = y0 + hS + tS + 26; anchor = 'start'
+    }
+    svg.appendChild(g('line', { ...ln, stroke: red, 'stroke-width': 2, 'stroke-dasharray': '7 4' }))
+    const jt = g('text', { x: tx, y: ty, 'text-anchor': anchor, 'font-size': 7.5, 'font-weight': 800, fill: red })
+    jt.textContent = jc
+    svg.appendChild(jt)
+  }
 
   container.appendChild(svg)
 }

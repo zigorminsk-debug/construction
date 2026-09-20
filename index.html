@@ -135,9 +135,9 @@
                 <label class="field">
                   <span>Лист Ш × В, мм</span>
                   <div class="inline-inputs">
-                    <input type="number" id="inpSheetW" value="2800" min="1000" max="3500" step="10">
+                    <input type="number" id="inpSheetW" value="2800" min="100" max="3500" step="10">
                     <span>×</span>
-                    <input type="number" id="inpSheetH" value="2070" min="1000" max="3500" step="10">
+                    <input type="number" id="inpSheetH" value="2070" min="100" max="3500" step="10">
                   </div>
                 </label>
                 <label class="field">
@@ -156,6 +156,21 @@
                 <button data-mat="osp12" data-sheet="2500x1250" data-t="12">ОСП</button>
                 <button data-mat="mdf16" data-sheet="2800x2070" data-t="16">МДФ</button>
                 <button data-mat="dsp22" data-sheet="2440x1830" data-t="22">ДСП 22</button>
+              </div>
+              <div class="custom-mat">
+                <div class="custom-mat-title">Мой материал (свой размер листа)</div>
+                <div class="grid2">
+                  <label class="field">
+                    <span>Название</span>
+                    <input type="text" id="inpMatName" placeholder="ЛДСП 8, Липа…" maxlength="24">
+                  </label>
+                  <label class="field">
+                    <span>Цена $/м²</span>
+                    <input type="number" id="inpMatPrice" value="30" min="1" max="999" step="1">
+                  </label>
+                </div>
+                <button class="btn btn-small" id="btnAddMat" type="button">＋ Добавить (толщина и лист — из полей выше)</button>
+                <div class="custom-mat-list" id="customMatList"></div>
               </div>
               <label class="check" id="chkRearRow"><input type="checkbox" id="chkRear" checked> <span>Задняя стенка ДВП 3.2 мм (в паз / накладная)</span></label>
               <label class="check" id="chkBaseRow"><input type="checkbox" id="chkBase"> <span>Цоколь 80 мм (планка снизу)</span></label>
@@ -276,6 +291,32 @@
               </div>
               <div class="check-group" id="extraOptions">
                 <!-- dynamic options per type -->
+              </div>
+              <div class="frame-block">
+                <label class="check"><input type="checkbox" id="chkMetalFrame"> <span>🏗️ Металлический каркас (профтруба)</span></label>
+                <div id="frameProfileRow" style="display:none" class="grid2" >
+                  <label class="field">
+                    <span>Сечение профтрубы</span>
+                    <select id="selFrameProfile">
+                      <option value="20x20">20×20 мм</option>
+                      <option value="30x30">30×30 мм</option>
+                      <option value="40x20" selected>40×20 мм</option>
+                      <option value="40x40">40×40 мм</option>
+                      <option value="50x25">50×25 мм</option>
+                      <option value="60x30">60×30 мм</option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span>Стенка, мм</span>
+                    <select id="selFrameWall">
+                      <option value="1.5">1.5</option>
+                      <option value="2" selected>2</option>
+                      <option value="2.5">2.5</option>
+                      <option value="3">3</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="hint" id="frameHint" style="display:none">4 стойки по углам + нижние рамы (фронт/бэк). Корпус крепится к стойкам болтами M6 (отметка отверстий — в карточке боковины).</div>
               </div>
             </section>
 

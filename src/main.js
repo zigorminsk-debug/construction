@@ -1,5 +1,5 @@
 import './style.css'
-import { calculate, getMaterial, MATERIALS, METAL_PROFILES } from './calculator.js'
+import { calculate, getMaterial, MATERIALS, METAL_PROFILES, setCustomMats } from './calculator.js'
 import { packParts, getPackStats } from './packing.js'
 import { drawAssembly, drawProjections, drawPartSketch, drawCuttingSheet, drawPartFlat, drawMiniPos } from './draw.js'
 import { buildLayout, fastenerTotals, jointsForPart, FAST_TYPES } from './joinery.js'
@@ -39,7 +39,13 @@ let state = {
   metalDividers: 0,
   metalShelves: true,
   metalRear: false,
-  showFasteners: false
+  showFasteners: false,
+  // каркас из профтрубы (корпусная мебель)
+  metalFrame: false,
+  frameProfile: '40x20',
+  frameWall: 0,
+  // мои материалы (свой размер листа)
+  customMats: []
 }
 
 let lastResult = null
@@ -49,6 +55,7 @@ let selectedKey = null // выбранная деталь (ключ из layout)
 
 function init(){
   loadState()
+  setCustomMats(state.customMats)
   bindUI()
   syncUIFromState()
   recalc()
@@ -90,31 +97,29 @@ function bindUI(){
   linkNumRange('inpD','rngD','D')
 
   $('#inpT').addEventListener('input', e=>{ state.t=Number(e.target.value); saveState(); recalc() })
-  $('#selMaterial').addEventListener('change', e=>{
-    state.materialKey=e.target.value
-    const m=getMaterial(state.materialKey, state.t)
-    state.t=m.t
-    $('#inpT').value=m.t
-    state.sheetW=m.sheet[0]
-    state.sheetH=m.sheet[1]
-    $('#inpSheetW').value=m.sheet[0]
-    $('#inpSheetH').value=m.sheet[1]
+  $('#selMaterial').addEventListener('change', e=> selectMaterial(e.target.value))
+  $$('#materialPresets button').forEach(b=>{
+    b.addEventListener('click', ()=> selectMaterial(b.dataset.mat))
+  })
+
+  // мои материалы (свой размер)
+  $('#btnAddMat').addEventListener('click', addCustomMat)
+  $('#inpMatName').addEventListener('keydown', e=>{ if(e.key==='Enter') addCustomMat() })
+
+  // каркас из профтрубы
+  $('#chkMetalFrame').addEventListener('change', e=>{
+    state.metalFrame=e.target.checked
+    toggleFrameUI()
     saveState(); recalc()
   })
-  $$('#materialPresets button').forEach(b=>{
-    b.addEventListener('click', ()=>{
-      const mat=b.dataset.mat, sheet=b.dataset.sheet, t=b.dataset.t
-      state.materialKey=mat
-      state.t=Number(t)
-      const [w,h]=sheet.split('x').map(Number)
-      state.sheetW=w; state.sheetH=h
-      $('#selMaterial').value=mat
-      $('#inpT').value=t
-      $('#inpSheetW').value=w
-      $('#inpSheetH').value=h
-      saveState(); recalc()
-    })
+  $('#selFrameProfile').addEventListener('change', e=>{
+    state.frameProfile=e.target.value
+    const pr = METAL_PROFILES[e.target.value]
+    if(pr && !state.frameWall) state.frameWall = pr.wall
+    $('#selFrameWall').value = String(pr.wall)
+    saveState(); recalc()
   })
+  $('#selFrameWall').addEventListener('change', e=>{ state.frameWall=Number(e.target.value); saveState(); recalc() })
   $('#inpSheetW').addEventListener('input', e=>{ state.sheetW=Number(e.target.value); saveState(); recalc() })
   $('#inpSheetH').addEventListener('input', e=>{ state.sheetH=Number(e.target.value); saveState(); recalc() })
   $('#selEdge').addEventListener('change', e=>{ state.edge=Number(e.target.value); saveState(); recalc() })
@@ -268,6 +273,79 @@ function syncFastenerBtn(){
   if(!b) return
   b.style.background = state.showFasteners ? '#f2c14e' : ''
   b.style.borderColor = state.showFasteners ? '#a16207' : ''
+}
+
+// ==================== Выбор / мои материалы ====================
+function selectMaterial(key){
+  state.materialKey = key
+  const m = getMaterial(key, state.t)
+  if(!m.custom) state.t = m.t // у своих материалов t уже задан пользователем
+  $('#inpT').value = m.t
+  state.sheetW = m.sheet[0]
+  state.sheetH = m.sheet[1]
+  $('#inpSheetW').value = m.sheet[0]
+  $('#inpSheetH').value = m.sheet[1]
+  renderCustomMats()
+  saveState(); recalc()
+}
+function addCustomMat(){
+  const name = $('#inpMatName').value.trim()
+  if(!name){ toast('Введите название материала'); return }
+  const t = Number($('#inpT').value) || 16
+  const sw = Number($('#inpSheetW').value) || 2800
+  const sh = Number($('#inpSheetH').value) || 2070
+  const price = Number($('#inpMatPrice').value) || 30
+  const mat = {
+    id: 'c' + Date.now(),
+    label: `${name} ${t} мм`,
+    t, sheet: [sw, sh], priceM2: price
+  }
+  state.customMats.push(mat)
+  setCustomMats(state.customMats)
+  syncMaterialSelect()
+  selectMaterial('custom:' + (state.customMats.length - 1))
+  $('#inpMatName').value = ''
+  toast(`Материал «${mat.label}» добавлен`)
+}
+function deleteCustomMat(i){
+  state.customMats.splice(i, 1)
+  setCustomMats(state.customMats)
+  if(String(state.materialKey) === 'custom:' + i) selectMaterial('ldsp16')
+  else { renderCustomMats(); syncMaterialSelect(); saveState() }
+}
+function renderCustomMats(){
+  const list = $('#customMatList')
+  if(!list) return
+  list.innerHTML = ''
+  state.customMats.forEach((m, i)=>{
+    const el = document.createElement('span')
+    el.className = 'custom-mat-chip' + (state.materialKey === 'custom:' + i ? ' active' : '')
+    el.innerHTML = `${m.label} • ${m.sheet[0]}×${m.sheet[1]} • ${m.priceM2}$ <b class="custom-mat-x" title="Удалить">✕</b>`
+    el.querySelector('.custom-mat-x').addEventListener('click', e=>{ e.stopPropagation(); deleteCustomMat(i) })
+    el.addEventListener('click', ()=> selectMaterial('custom:' + i))
+    list.appendChild(el)
+  })
+}
+/** пересобрать список опций selMaterial со своими материалами */
+function syncMaterialSelect(){
+  const sel = $('#selMaterial')
+  if(!sel) return
+  const staticOpts = [...sel.querySelectorAll('option')]
+  sel.innerHTML = ''
+  staticOpts.forEach(o=> sel.appendChild(o))
+  state.customMats.forEach((m, i)=>{
+    const o = document.createElement('option')
+    o.value = 'custom:' + i
+    o.textContent = `Мой: ${m.label} (${m.sheet[0]}×${m.sheet[1]})`
+    sel.appendChild(o)
+  })
+  sel.value = state.materialKey
+}
+function toggleFrameUI(){
+  const row = $('#frameProfileRow')
+  const hint = $('#frameHint')
+  if(row) row.style.display = state.metalFrame ? '' : 'none'
+  if(hint) hint.style.display = state.metalFrame ? '' : 'none'
 }
 
 /** ключ может быть «shelf-2» (ряд на эскизе) → ищем деталь с этим префиксом */
@@ -511,6 +589,7 @@ function openPartCard(key){
           ${p.material} • ${item.metal ? `длина ${Math.round(item.plateW)} мм • сечение ${item.section||''}` : `${item.plateW} × ${item.plateH} × ${item.thick} мм`}
           ${p.edge && p.edge!=='-' ? ` • кромка: ${p.edge}` : ''}
         </div>
+        ${p.splitInfo? `<div class="pm-split-note">🔗 Узел стыковки: деталь разрезана на <b>${p.splitInfo.total}</b> сегмента под лист — это сегмент <b>${p.splitInfo.index+1}</b> из ${p.splitInfo.total} (цельная деталь: ${p.splitInfo.origW}×${p.splitInfo.origH} мм)</div>` : ''}
       </div>
       <button class="btn btn-ghost" id="pmCloseX" style="color:#fff;background:rgba(255,255,255,.12)">✕</button>
     </div>
@@ -615,7 +694,8 @@ function syncUIFromState(){
   $('#inpW').value=state.W; $('#rngW').value=state.W
   $('#inpD').value=state.D; $('#rngD').value=state.D
   $('#inpT').value=state.t
-  $('#selMaterial').value=state.materialKey
+  syncMaterialSelect()
+  renderCustomMats()
   $('#inpSheetW').value=state.sheetW
   $('#inpSheetH').value=state.sheetH
   $('#selEdge').value=String(state.edge)
@@ -638,6 +718,12 @@ function syncUIFromState(){
   $('#inpMetalDividers').value=state.metalDividers
   $('#chkMetalShelves').checked=state.metalShelves
   $('#chkMetalRear').checked=state.metalRear
+  // каркас из профтрубы
+  $('#chkMetalFrame').checked=state.metalFrame
+  $('#selFrameProfile').value=state.frameProfile
+  const fpr = METAL_PROFILES[state.frameProfile]
+  $('#selFrameWall').value=String(state.frameWall || (fpr? fpr.wall:2))
+  toggleFrameUI()
   updateExtraOptions()
   applyTypeVisibility()
   syncHint()
@@ -755,7 +841,7 @@ function renderJoints(){
 
 function renderAssembly(){
   const el=$('#assemblyCanvas')
-  const params = {...state, materialLabel:getMaterial(state.materialKey, state.t).label, _profile: lastResult.params._profile}
+  const params = {...state, materialLabel:getMaterial(state.materialKey, state.t).label, _profile: lastResult.params._profile, _frameProfile: lastResult.params._frameProfile}
   drawAssembly(el, lastLayout, params, state.viewMode, state.exploded, selectedKey, state.showFasteners)
   // legend
   const legend=$('#assemblyLegend')
@@ -765,10 +851,11 @@ function renderAssembly(){
     <div class="legend-item"><span class="legend-dot" style="background:#e7e5e4; border:1px solid #999"></span> ДВП / Задняя</div>
     <div class="legend-item"><span class="legend-dot" style="background:#0f172a"></span> Болты M6 (⬅ включите «Отверстия»)</div>`
   }else{
+    const frameRow = state.metalFrame ? `<div class="legend-item"><span class="legend-dot" style="background:#9fb0bf"></span> Каркас: профтруба ${lastResult.params._frameProfile.a}×${lastResult.params._frameProfile.b}</div>` : ''
     legend.innerHTML=`<div class="legend-item"><span class="legend-dot" style="background:#f2c14e"></span> Полка / Крыша</div>
     <div class="legend-item"><span class="legend-dot" style="background:#1e3a2f"></span> Боковина / Корпус</div>
     <div class="legend-item"><span class="legend-dot" style="background:#e7e5e4; border:1px solid #999"></span> ДВП / Задняя</div>
-    <div class="legend-item"><span class="legend-dot" style="background:#a16207"></span> Кромка ПВХ</div>`
+    <div class="legend-item"><span class="legend-dot" style="background:#a16207"></span> Кромка ПВХ</div>${frameRow}`
   }
   // info о выбранной детали
   const info = $('#assemblyInfo')
@@ -934,7 +1021,7 @@ function renderEstimate(){
   const work = 25 // base
   // металл
   const hasMetal = lastPack.hasMetal
-  const prof = lastResult.params._profile
+  const prof = (state.metalFrame && state.type !== 'metal') ? lastResult.params._frameProfile : lastResult.params._profile
   const metalCost = hasMetal ? lastPack.metalTotals.meters * prof.price : 0
   const metalRows = hasMetal ? `
     <div class="est-row"><span>Профиль ${prof.a}×${prof.b}×${prof.wall} мм • ${lastPack.metalTotals.meters.toFixed(2)} м × ${prof.price}$</span><b>${metalCost.toFixed(1)} $</b></div>
@@ -994,6 +1081,12 @@ function estimateFittings(){
     out.push({name:'Саморез по металлу Ø4×13', qty: state.metalShelves? 4*(L-1)*(nDiv+1):0, cost: state.metalShelves? 4*(L-1)*(nDiv+1)*0.08:0})
     if(state.metalRear) out.push({name:'Саморез по металлу Ø4×13 (задняя)', qty: 8, cost: 1.0})
     return out
+  }
+  // каркас из профтрубы (корпусная мебель)
+  if(state.metalFrame){
+    out.push({name:'Болт M6×30 + гайка + шайба (корпус → стойки)', qty: 8, cost: 8*0.35})
+    out.push({name:'Болт M6×20 + гайка (стойки → рамы)', qty: 4, cost: 4*0.35})
+    out.push({name:'Анкер/подставка под стойку', qty: 4, cost: 4*0.5})
   }
   if(state.doors>0){
     out.push({name:'Петля накладная 35мм (4шарн., с доводчиком)', qty: state.doors*2, cost: state.doors*2*1.8})

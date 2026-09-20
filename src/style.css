@@ -303,3 +303,15 @@ input,select,button{font-family:inherit}
 /* кликабельные эскизы в карточке детали */
 .pm-pos.zoomable,.pm-flat.zoomable{ cursor:zoom-in;position:relative }
 .pm-pos.zoomable::after,.pm-flat.zoomable::after{ content:'🔍 нажми — увеличить';position:absolute;top:6px;right:6px;background:rgba(255,255,255,.92);border:1px solid var(--line2);border-radius:99px;font-size:10px;font-weight:700;color:var(--accent2);padding:3px 8px;pointer-events:none }
+
+/* ===== мои материалы (свой размер листа) ===== */
+.custom-mat{margin-top:12px;padding:10px;background:#f8fafc;border:1px dashed var(--line2);border-radius:10px}
+.custom-mat-title{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--accent2);margin-bottom:8px}
+.custom-mat-list{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.custom-mat-chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:5px 10px;border-radius:99px;border:1px solid var(--line2);background:#fff;cursor:pointer}
+.custom-mat-chip:hover{border-color:var(--accent2)}
+.custom-mat-chip.active{background:var(--accent);color:var(--accent2);border-color:var(--accent)}
+.custom-mat-x{font-size:10px;opacity:.6}
+.custom-mat-x:hover{opacity:1}
+/* узел стыковки в карточке детали */
+.pm-split-note{margin-top:6px;font-size:12px;font-weight:600;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:6px 10px}

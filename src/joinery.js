@@ -49,8 +49,21 @@ export function buildLayout(result, p){
     return null
   }
 
+  // деталь была разрезана под лист (splitMap) — «полная» псевдо-деталь для раскладки
+  function findSplitBase(partName){
+    const sm = (result.splitMap || {})[partName]
+    if(!sm) return null
+    const piece = result.parts.find(q=> q.splitInfo && q.splitInfo.baseName === partName)
+    if(!piece) return null
+    return {
+      name: partName, w: sm.origW, h: sm.origH,
+      thickness: piece.thickness, material: piece.material, edge: piece.edge || '',
+      id: 0, note: piece.note || '', split: sm
+    }
+  }
+
   function add(key, partName, x, y, z, w, h, d, opts = {}){
-    const part = opts.part || byName.get(partName) || { name: partName, w, h, thickness: t, material: '', edge: '' }
+    const part = opts.part || byName.get(partName) || findSplitBase(partName) || { name: partName, w, h, thickness: t, material: '', edge: '' }
     const item = {
       key, partId: part.id ?? 0, name: partName,
       x, y, z, w, h, d,
@@ -115,6 +128,13 @@ export function buildLayout(result, p){
       }
       if(baseHc){
         holes.push(HOLE('M', 30, 40, 4, 30, 'screw'), HOLE('M', D - 30, 40, 4, 30, 'screw'))
+      }
+      // каркас из профтрубы: болты M6 в стойки (фронт + бэк), 30 мм от пола/потолка
+      if(p.metalFrame){
+        const ph = p._frameProfile.b, pwf = p._frameProfile.a
+        ;[30, sideH - 30].forEach(v=>{
+          holes.push(HOLE('M', ph / 2, v, 6.6, pwf, 'bolt'), HOLE('M', D - ph / 2, v, 6.6, pwf, 'bolt'))
+        })
       }
       // под полки
       shelfYs.forEach(sy=>{
@@ -281,6 +301,37 @@ export function buildLayout(result, p){
       }
     }
 
+    // ---- Металлический каркас (профтруба): 4 стойки + нижние рамы ----
+    if(p.metalFrame){
+      const prof = p._frameProfile
+      const pw = prof.a, ph = prof.b
+      const postH = Hc
+      const frameLabel = `Профиль ${pw}×${ph}×${prof.wall}`
+      ;[[0, 0, 'fl'], [W - pw, 0, 'fr'], [0, D - ph, 'bl'], [W - pw, D - ph, 'br']].forEach(([px, pz, tag], i)=>{
+        const isLeft = tag === 'fl' || tag === 'bl'
+        add(`frame-post-${i}`, 'Стойка каркаса', px, 0, pz, pw, postH, ph, {
+          group: 'рама', metal: true, section: `${pw}×${ph}×${prof.wall}`,
+          part: byName.get('Стойка каркаса') || { name: 'Стойка каркаса', w: postH, h: 0, thickness: prof.wall, material: frameLabel, edge: '', note: '' },
+          plateW: postH, plateH: ph, thick: pw,
+          holes: [HOLE('M', 30, ph / 2, 6.6, pw, 'bolt'), HOLE('M', postH - 30, ph / 2, 6.6, pw, 'bolt')],
+          note: 'болты M6 к боковинам: 2 шт (30 мм от пола/потолка)',
+          normal: 'x', normalDir: isLeft ? 1 : -1, uAxis: 'y', vAxis: 'z',
+          origin: [isLeft ? pw : W - pw, 0, pz]
+        })
+      })
+      ;[0, D - ph].forEach((zz, zi)=>{
+        add(`frame-rail-${zi}`, 'Рама нижняя', pw, 0, zz, W - 2 * pw, pw, ph, {
+          group: 'рама', metal: true, section: `${pw}×${ph}×${prof.wall}`,
+          part: byName.get('Рама нижняя') || { name: 'Рама нижняя', w: W - 2 * pw, h: 0, thickness: prof.wall, material: frameLabel, edge: '', note: '' },
+          plateW: W - 2 * pw, plateH: ph, thick: pw,
+          holes: [HOLE('M', 10, ph / 2, 6.6, pw, 'bolt'), HOLE('M', W - 2 * pw - 10, ph / 2, 6.6, pw, 'bolt')],
+          note: 'болты M6 к стойкам: по 1 на стойку',
+          normal: 'z', normalDir: zi === 0 ? -1 : 1, uAxis: 'x', vAxis: 'z',
+          origin: [pw, 0, zz]
+        })
+      })
+    }
+
     // ---- Текстовые соединения ----
     if(inset){
       joint('Боковина ↔ Крыша', 'Боковина', 'Крыша', [{ type: 'dowel', qty: 4, name: 'Шкант Ø8×40 + клей' }], 'по 2 шканта, 30 мм от кромок, 35 мм от торца')
@@ -306,6 +357,10 @@ export function buildLayout(result, p){
       joint('Короб ящика: боковина ↔ перед/зад', 'Боковина ящика', 'Перед/зад ящика', [{ type: 'screw', qty: 8 * p.drawers, name: 'Саморез Ø4×40' }], 'по 4 шт на короб: 2 на перед, 2 на зад')
       joint('Боковина ящика ↔ Направляющая', 'Боковина ящика', 'Направляющая шариковая', [{ type: 'screw', qty: 6 * p.drawers, name: 'Саморез Ø3.5×16' }], '3 отверстия на каждую боковину (50/150/250 мм)')
       joint('Дно ящика ↔ Короб', 'Дно ящика ДВП', 'Боковина ящика', [{ type: 'dowel', qty: 1, name: 'Паз 6 мм + гвозди' }], 'дно садится в паз, гвозди 10 мм по периметру')
+    }
+    if(p.metalFrame){
+      joint(`${sideName} ↔ Стойка каркаса`, sideName, 'Стойка каркаса', [{ type: 'bolt', qty: 8, name: 'Болт M6×30 + гайка + шайба' }], 'по 2 болта на стойку (фронт + бэк), 30 мм от пола и потолка, Ø6.6 — разметка в карточке боковины')
+      joint('Стойка каркаса ↔ Рама нижняя', 'Стойка каркаса', 'Рама нижняя', [{ type: 'bolt', qty: 4, name: 'Болт M6×20 + гайка' }], 'по 1 болту на стойку, 10 мм от торца рамы')
     }
   }
 
@@ -575,7 +630,159 @@ export function buildLayout(result, p){
     case 'metal': metalFrame(); break
   }
 
-  return { items, ghosts, joints, metal: p.type === 'metal' }
+  // детали, разрезанные под лист (splitMap) → сегменты с узлами стыковки
+  const splitItems = applySplits(items, joints, result)
+
+  return { items: splitItems, ghosts, joints, metal: p.type === 'metal' }
+}
+
+const DIM_OF_AXIS = { x: 'w', y: 'h', z: 'd' }
+
+/**
+ * Применяет авторазрез (calculator.splitOversized) к элементам сборки:
+ *  - полный бокс детали разбивается на N сегментов
+ *  - отверстия пересчитываются в локальные координаты сегмента
+ *  - на гранях стыка добавляются шканты + саморез (узел стыковки)
+ */
+function applySplits(items, joints, result){
+  const sm = result.splitMap || {}
+  const newItems = []
+  items.forEach(it=>{
+    const info = sm[it.name]
+    if(!info || it.name.indexOf('/') >= 0){ newItems.push(it); return }
+
+    const N = info.total
+    const longAxis = info.longAxis
+    const alongB = longAxis === 'h' // разрез вдоль part.h (axisB)
+
+    // мировые оси: axisA — направление part.w, axisB — part.h
+    const axisOf = (dim)=> Math.abs(it.h - dim) < 1.5 ? 'y' : (Math.abs(it.d - dim) < 1.5 ? 'z' : (Math.abs(it.w - dim) < 1.5 ? 'x' : null))
+    const axisA = axisOf(info.origW)
+    const axisB = axisOf(info.origH)
+    if(!axisA || !axisB || axisA === axisB){ newItems.push(it); return }
+    const tAxis = ['x', 'y', 'z'].filter(a=> a !== axisA && a !== axisB).sort((a, b)=> it[a] - it[b])[0]
+    const tSize = it[tAxis]
+
+    const splitA = alongB ? axisB : axisA  // ось разреза по длинной стороне
+    const splitB = alongB ? axisA : axisB  // ось разреза по короткой (если shortN>1)
+    const otherAxis = alongB ? axisA : axisB
+
+    const t = (it.part && it.part.thickness) || 16
+    const dD = t >= 12 ? 8 : 6
+    const dL = Math.max(30, Math.round(t * 3 / 10) * 10)
+    const sL = Math.max(30, Math.round((t * 2 + 8) / 10) * 10)
+
+    const cutPos = []
+    let idx = 0
+    for(let li = 0; li < info.longN; li++){
+      let longOff = 0
+      for(let k = 0; k < li; k++) longOff += info.longSizes[k]
+      if(li > 0) cutPos.push(String(Math.round(longOff)))
+      for(let si = 0; si < info.shortN; si++){
+        let shortOff = 0
+        for(let k = 0; k < si; k++) shortOff += info.shortSizes[k]
+        const sizeLong = info.longSizes[li], sizeShort = info.shortSizes[si]
+        const isFirstLong = li === 0, isLastLong = li === info.longN - 1
+
+        const sub = { ...it }
+        sub.key = `${it.key}-${idx}`
+        sub.name = `${it.name} ${idx + 1}/${N}`
+
+        // габариты сегмента
+        sub[splitA] = it[splitA] + longOff
+        sub[DIM_OF_AXIS[splitA]] = sizeLong
+        if(info.shortN > 1){
+          sub[splitB] = it[splitB] + shortOff
+          sub[DIM_OF_AXIS[splitB]] = sizeShort
+        }
+        // развёртка (грань)
+        if(alongB){ sub.plateH = sizeLong; if(info.shortN > 1) sub.plateW = sizeShort }
+        else { sub.plateW = sizeLong; if(info.shortN > 1) sub.plateH = sizeShort }
+
+        // координаты в системе детали (u вдоль axisA/origW, v вдоль axisB/origH)
+        const offA = alongB ? shortOff : longOff
+        const offB = alongB ? longOff : shortOff
+        const sizeA = alongB ? sizeShort : sizeLong
+        const sizeB = alongB ? sizeLong : sizeShort
+
+        // ---- отверстия: перенос в сегмент ----
+        const holes = []
+        it.holes.forEach(hle=>{
+          const f = hle.f
+          let u = hle.u, v = hle.v
+          let keep = true
+          if(f === 'M'){
+            if(u < offA - 1 || u > offA + sizeA + 1) keep = false
+            if(v < offB - 1 || v > offB + sizeB + 1) keep = false
+            u -= offA; v -= offB
+          } else if(f === 'top'){
+            if(offB > 1) keep = false
+            else { if(u < offA - 1 || u > offA + sizeA + 1) keep = false; u -= offA }
+          } else if(f === 'bottom'){
+            if(offB < info.origH - sizeB - 1) keep = false
+            else { if(u < offA - 1 || u > offA + sizeA + 1) keep = false; u -= offA }
+          } else if(f === 'left'){
+            if(offA > 1) keep = false
+            else { if(v < offB - 1 || v > offB + sizeB + 1) keep = false; v -= offB }
+          } else if(f === 'right'){
+            if(offA < info.origW - sizeA - 1) keep = false
+            else { if(v < offB - 1 || v > offB + sizeB + 1) keep = false; v -= offB }
+          }
+          if(keep) holes.push({ ...hle, u: Math.round(u), v: Math.round(v) })
+        })
+
+        // ---- узел стыковки: шканты + саморез на грани стыка ----
+        const Llong = alongB ? sizeA : sizeB // ширина грани стыка
+        const addJointHoles = (face)=>{
+          holes.push(HOLE(face, Math.round(Llong * 0.25), Math.round(t / 2), dD, t, 'dowel'))
+          holes.push(HOLE(face, Math.round(Llong * 0.75), Math.round(t / 2), dD, t, 'dowel'))
+          holes.push(HOLE(face, Math.round(Llong * 0.5), Math.round(t / 2), 4, sL, 'screw'))
+        }
+        if(!isLastLong) addJointHoles(alongB ? 'top' : 'right')
+        if(!isFirstLong) addJointHoles(alongB ? 'bottom' : 'left')
+
+        // ---- мировые отверстия (для подсветки 3D) ----
+        sub.worldHoles = (it.worldHoles || []).filter(hl=>{
+          const c = hl[splitA]
+          if(c < it[splitA] + longOff - 1 || c > it[splitA] + longOff + sizeLong + 1) return false
+          if(info.shortN > 1){
+            const c2 = hl[splitB]
+            if(c2 < it[splitB] + shortOff - 1 || c2 > it[splitB] + shortOff + sizeShort + 1) return false
+          }
+          return true
+        })
+        const addJointWH = (endFace)=>{
+          const startCoord = endFace ? it[splitA] + longOff + sizeLong : it[splitA] + longOff
+          ;[0.25, 0.5, 0.75].forEach(frac=>{
+            const coords = {}
+            coords[splitA] = startCoord
+            coords[otherAxis] = it[otherAxis] + Llong * frac
+            coords[tAxis] = it[tAxis] + tSize / 2
+            sub.worldHoles.push({ x: coords.x, y: coords.y, z: coords.z, d: dD, t: 'dowel', face: splitA === 'y' ? 'y+' : 'z-' })
+          })
+        }
+        if(!isLastLong) addJointWH(true)
+        if(!isFirstLong) addJointWH(false)
+
+        sub.holes = holes
+        // фактическая деталь (сегмент) из списка раскроя — для карточки
+        const piece = result.parts.find(q=> q.splitInfo && q.splitInfo.baseName === it.name && q.splitInfo.index === idx)
+        if(piece){ sub.part = piece; sub.partId = piece.id }
+        newItems.push(sub)
+        idx++
+      }
+    }
+    joints.push({
+      label: `Разрез ${it.name} — ${N} сегмента`,
+      a: it.name, b: 'стыковка торцов',
+      fasteners: [
+        { type: 'dowel', qty: 2 * (N - 1), name: `Шкант Ø${dD}×${dL} + клей` },
+        { type: 'screw', qty: (N - 1), name: `Саморез Ø4×${sL}` }
+      ],
+      note: `распил: ${cutPos.join('; ')} мм; на стыке — шканты + саморез, клей; кромка только на внешних гранях`
+    })
+  })
+  return newItems
 }
 
 /** Суммарно по типам крепежа */
