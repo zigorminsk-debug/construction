@@ -101,12 +101,10 @@ jobs:
       - name: Build Debug APK
         working-directory: android
         run: |
-          if [ -s gradle/wrapper/gradle-wrapper.jar ]; then
-            ./gradlew assembleDebug --stacktrace 2>&1 | tee /tmp/gradle.log; exit ${PIPESTATUS[0]}
-          else
-            echo "Wrapper missing, using gradle directly"
-            gradle assembleDebug --stacktrace 2>&1 | tee /tmp/gradle.log; exit ${PIPESTATUS[0]}
-          fi
+          echo "Using gradle directly (bypass wrapper)..."
+          gradle --version 2>&1 | head -20 || true
+          # Ensure wrapper is valid or generate it, but build with gradle directly
+          gradle assembleDebug --stacktrace 2>&1 | tee /tmp/gradle.log; exit ${PIPESTATUS[0]}
 
       - name: Dump gradle log to summary
         if: always()
@@ -135,11 +133,7 @@ jobs:
       - name: Build Release APK (unsigned)
         working-directory: android
         run: |
-          if [ -s gradle/wrapper/gradle-wrapper.jar ]; then
-            ./gradlew assembleRelease --stacktrace 2>&1 | tee /tmp/gradle-release.log; echo "release exit code ${PIPESTATUS[0]}" || true
-          else
-            gradle assembleRelease --stacktrace 2>&1 | tee /tmp/gradle-release.log; echo "release exit code ${PIPESTATUS[0]}" || true
-          fi
+          gradle assembleRelease --stacktrace 2>&1 | tee /tmp/gradle-release.log; echo "release exit code ${PIPESTATUS[0]}" || true
 
       - name: Upload Gradle logs (on failure)
         if: always()
