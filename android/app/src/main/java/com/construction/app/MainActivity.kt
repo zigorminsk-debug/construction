@@ -190,7 +190,10 @@ class MainActivity : AppCompatActivity() {
                         .show()
                 }
 
-                val total = downloadTo(apkFile, apkUrl) { done ->
+                // 1) размер APK (отдельный запрос, чтобы прогресс-бар был в процентах)
+                val total = probeSize(apkUrl)
+                // 2) скачивание с прогрессом
+                downloadTo(apkFile, apkUrl) { done ->
                     if (total > 0) handler.post { bar.progress = (done * 100 / total).toInt() }
                 }
 
@@ -223,14 +226,26 @@ class MainActivity : AppCompatActivity() {
         }.start()
     }
 
-    /** Скачивает url в файл, возвращает общий размер; onProgress — сколько скачано. */
-    private fun downloadTo(file: File, url: String, onProgress: (Long) -> Unit): Long {
+    /** Размер файла по URL (из Content-Length); 0 — если не получить. */
+    private fun probeSize(url: String): Long {
+        val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 20000
+            readTimeout = 20000
+        }
+        return try {
+            if (conn.responseCode == 200) conn.contentLength.toLong() else 0L
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    /** Скачивает url в файл; onProgress — сколько байт уже скачано. */
+    private fun downloadTo(file: File, url: String, onProgress: (Long) -> Unit) {
         val conn = (URL(url).openConnection() as HttpURLConnection).apply {
             connectTimeout = 20000
             readTimeout = 60000
         }
-        val total = if (conn.responseCode == 200) conn.contentLength.toLong() else 0L
-        if (total <= 0) {
+        if (conn.responseCode != 200) {
             conn.disconnect()
             throw java.io.IOException("HTTP ${conn.responseCode} при скачивании APK")
         }
@@ -248,7 +263,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
         conn.disconnect()
-        return total
     }
 
     private fun installApk(file: File) {
