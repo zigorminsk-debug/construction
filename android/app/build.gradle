@@ -67,7 +67,6 @@ android {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             signingConfig signingConfigs.permanent
-            outputFileName = "construction-v${ciVersionName}.apk"
         }
         debug {
             debuggable true
@@ -87,6 +86,16 @@ android {
     packaging {
         resources {
             excludes += '/META-INF/{AL2.0,LGPL2.1}'
+        }
+    }
+}
+
+// Имя release-APK: construction-v<versionName>.apk
+// (outputFileName задаётся на выходе варианта, а не на BuildType — AGP 8.x)
+applicationVariants.all { variant ->
+    if (variant.buildType.name == 'release') {
+        variant.outputs.all {
+            outputFileName = "construction-v${ciVersionName}.apk"
         }
     }
 }
