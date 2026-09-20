@@ -148,8 +148,8 @@ jobs:
           echo "Собрано:"
           ls -lh app/build/outputs/apk/release/
 
-      - name: Upload Gradle logs (on failure)
-        if: always()
+      - name: Upload Gradle logs (only on failure — для разбора сбоя)
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: gradle-logs
@@ -157,15 +157,6 @@ jobs:
             /tmp/gradle*.log
             android/app/build/outputs/
             android/build/
-          if-no-files-found: warn
-
-      - name: Upload Debug APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: construction-debug-apk
-          path: |
-            android/app/build/outputs/apk/debug/*.apk
-            android/app/build/outputs/apk/release/*.apk
           if-no-files-found: warn
 
       - name: Upload Release APK (signed, recommended)
@@ -195,15 +186,17 @@ jobs:
             echo "apksigner/APK не найдены, пропускаем проверку"
           fi
 
-      - name: Create GitHub Release (on main push)
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      - name: Create GitHub Release (каждый push — для автообновления приложения)
+        # Приложение само проверяет /releases/latest и предлагает скачать новую версию.
+        # Только push (без pull_request), чтобы PR-запуски не плодили релизы.
+        if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.${{ github.run_number }}
-          name: Construction v1.0.${{ github.run_number }} (versionCode ${{ github.run_number }})
+          name: Construction v1.0.${{ github.run_number }} (versionCode ${{ github.run_number }}, ${GITHUB_REF_NAME})
           body: |
             Автоматическая сборка APK • versionCode ${{ github.run_number }}
-            - Конструктор мебели PRO100: раскрой, эскизы, крепёж, металлическая рама
+            - Imaster — конструктор мебели: раскрой, эскизы, крепёж, металлическая рама
             - Подписано перманентным ключом `android/keystore/construction-release.p12` —
               установка поверх предыдущей версии (тот же сертификат)
             - Рекомендуемый файл: `construction-v1.0.${{ github.run_number }}.apk` (release)

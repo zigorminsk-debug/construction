@@ -1,7 +1,7 @@
 {
   "name": "Construction — Конструктор раскроя",
   "short_name": "Construction",
-  "description": "Расчет раскроя листового материала PRO100 — шкаф, полка, стол, тумба, стойка",
+  "description": "Imaster — конструктор мебели: раскрой, эскизы, крепёж, смета",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#1e3a2f",
