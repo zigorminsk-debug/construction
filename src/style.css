@@ -22,7 +22,7 @@ input,select,button{font-family:inherit}
 
 #app{min-height:100vh;display:flex;flex-direction:column}
 .header{
-  height:60px;background:var(--accent2);color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 18px;position:sticky;top:0;z-index:20;border-bottom:1px solid rgba(255,255,255,.08)
+  min-height:60px;background:var(--accent2);color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 18px;position:sticky;top:0;z-index:20;border-bottom:1px solid rgba(255,255,255,.08)
 }
 .header-left{display:flex;align-items:center;gap:12px}
 .logo{width:38px;height:38px;display:grid;place-items:center;background:#fff;border-radius:10px}
@@ -182,19 +182,24 @@ input,select,button{font-family:inherit}
 @media print{
   .header,.panel-left,.tabs,.mobile-nav,.view-switch,.canvas-toolbar .toolbar-right,.parts-actions,.btn{display:none !important}
   body.view-params .main{display:flex !important}
-  .layout{grid-template-columns:1fr}
-  .main-content{padding:0}
+  #app{display:block;height:auto;min-height:0;overflow:visible}
+  .layout{display:block;grid-template-columns:none;height:auto;min-height:0}
+  .main{height:auto;min-height:0;overflow:visible}
+  .main-content{padding:0;overflow:visible}
   .canvas-wrap,.proj-card,.table-wrap,.sheet-card{box-shadow:none;break-inside:avoid}
 }
 
 /* Mobile / narrow window: one screen at a time — «Параметры» или «Результат» */
 .view-switch{display:none}
 @media (max-width: 980px){
-  #app{display:grid;grid-template-rows:auto auto 1fr auto;height:100vh;height:100dvh;overflow:hidden}
+  /* APK — edge-to-edge (WebView за системными барами): цепочка vh→svh→dvh
+     + safe-area padding, чтобы нижнее меню не пряталось за системной панелью */
+  #app{display:grid;grid-template-rows:auto auto 1fr auto;height:100vh;height:100svh;height:100dvh;overflow:hidden}
+  .header{padding-top:env(safe-area-inset-top, 0px)}
   .view-switch{display:flex;gap:8px;padding:8px 12px;background:var(--bg2);border-bottom:1px solid var(--line)}
   .view-switch button{flex:1;padding:10px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--text);font-weight:800;font-size:12px;cursor:pointer}
   .view-switch button.active{background:var(--accent2);color:#fff;border-color:var(--accent2)}
-  .layout{grid-template-columns:1fr;min-height:0}
+  .layout{grid-template-columns:1fr;grid-template-rows:1fr;height:100%;min-height:0}
   .panel-left{border-right:none;border-bottom:none;min-height:0}
   .main{min-height:0}
   body.view-params .main{display:none}
@@ -202,7 +207,7 @@ input,select,button{font-family:inherit}
   body.view-params .mobile-nav{display:none}
   .projections-grid{grid-template-columns:1fr}
   .estimate-grid{grid-template-columns:1fr}
-  .mobile-nav{display:flex;position:static}
+  .mobile-nav{display:flex;position:static;padding-bottom:calc(env(safe-area-inset-bottom, 0px) + 6px)}
   .header .badge{display:none}
 }
 @media (max-width: 640px){

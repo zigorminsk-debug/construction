@@ -1,7 +1,9 @@
 package com.construction.app
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.os.Bundle
+import android.print.PrintManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.webkit.WebChromeClient
@@ -21,7 +23,21 @@ class MainActivity : AppCompatActivity() {
         webView = WebView(this)
         setContentView(webView)
 
-        webView.webViewClient = WebViewClient()
+        // Печать: window.print() из веб-кода → системный диалог Android
+        // (там можно выбрать принтер или «Сохранить как PDF»)
+        webView.webViewClient = object : WebViewClient() {
+            @Deprecated("Deprecated in Java")
+            override fun onPrepareForPrint(
+                view: WebView,
+                printHelperAdapter: WebViewClient.PrintHelperAdapter
+            ) {
+                val printManager = getSystemService(Context.PRINT_SERVICE) as PrintManager
+                val jobInfo = printHelperAdapter.printJobAdapter?.onLayout(0)
+                if (jobInfo != null) {
+                    printManager.print(jobInfo.name, printHelperAdapter.printJobAdapter, jobInfo)
+                }
+            }
+        }
         webView.webChromeClient = WebChromeClient()
 
         val settings: WebSettings = webView.settings
