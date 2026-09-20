@@ -63,6 +63,11 @@
                   <span class="type-name">Полка</span>
                   <span class="type-desc">настенная</span>
                 </button>
+                <button class="type-card" data-type="metal">
+                  <span class="type-icon">🏗️</span>
+                  <span class="type-name">Металл</span>
+                  <span class="type-desc">рама из профиля</span>
+                </button>
               </div>
             </section>
 
@@ -96,7 +101,7 @@
             </section>
 
             <!-- Material -->
-            <section class="section">
+            <section class="section" id="materialSection">
               <div class="section-label">МАТЕРИАЛ КОРПУСА</div>
               <div class="grid2">
                 <label class="field">
@@ -146,12 +151,62 @@
                 <button data-mat="mdf16" data-sheet="2800x2070" data-t="16">МДФ</button>
                 <button data-mat="dsp22" data-sheet="2440x1830" data-t="22">ДСП 22</button>
               </div>
-              <label class="check"><input type="checkbox" id="chkRear" checked> <span>Задняя стенка ДВП 3.2 мм (в паз / накладная)</span></label>
-              <label class="check"><input type="checkbox" id="chkBase"> <span>Цоколь 80 мм (планка снизу)</span></label>
+              <label class="check" id="chkRearRow"><input type="checkbox" id="chkRear" checked> <span>Задняя стенка ДВП 3.2 мм (в паз / накладная)</span></label>
+              <label class="check" id="chkBaseRow"><input type="checkbox" id="chkBase"> <span>Цоколь 80 мм (планка снизу)</span></label>
+            </section>
+
+            <!-- Metal frame options -->
+            <section class="section" id="metalSection" style="display:none">
+              <div class="section-label">🏗️ МЕТАЛЛИЧЕСКАЯ РАМА ИЗ ПРОФИЛЯ</div>
+              <div class="grid2">
+                <label class="field">
+                  <span>Сечение профиля</span>
+                  <select id="selMetalProfile">
+                    <option value="20x20">20×20 мм</option>
+                    <option value="30x30">30×30 мм</option>
+                    <option value="40x20" selected>40×20 мм</option>
+                    <option value="40x40">40×40 мм</option>
+                    <option value="50x25">50×25 мм</option>
+                    <option value="60x30">60×30 мм</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Стенка, мм</span>
+                  <select id="selMetalWall">
+                    <option value="1.5">1.5</option>
+                    <option value="2" selected>2</option>
+                    <option value="2.5">2.5</option>
+                    <option value="3">3</option>
+                  </select>
+                </label>
+              </div>
+              <div class="stepper-grid" style="margin-top:10px">
+                <label class="stepper">
+                  <span>Уровней рам (полок)</span>
+                  <div class="stepper-ctrl">
+                    <button data-action="dec" data-target="levels">−</button>
+                    <input type="number" id="inpMetalLevels" value="3" min="2" max="6" readonly>
+                    <button data-action="inc" data-target="levels">+</button>
+                  </div>
+                </label>
+                <label class="stepper">
+                  <span>Верт. перегородок</span>
+                  <div class="stepper-ctrl">
+                    <button data-action="dec" data-target="dividers">−</button>
+                    <input type="number" id="inpMetalDividers" value="0" min="0" max="4" readonly>
+                    <button data-action="inc" data-target="dividers">+</button>
+                  </div>
+                </label>
+              </div>
+              <div class="check-group" style="margin-top:10px">
+                <label class="check"><input type="checkbox" id="chkMetalShelves" checked> <span>Листовые полки на рамах (ЛДСП/фанера)</span></label>
+                <label class="check"><input type="checkbox" id="chkMetalRear"> <span>Задняя стенка ДВП</span></label>
+              </div>
+              <div class="hint" style="margin-top:10px">Основная конструкция — <b>металлический каркас из прямоугольного профиля</b>. Крепление — болты M6 (Ø6.6) и угольники. Раскрой профиля и смета считаются отдельно.</div>
             </section>
 
             <!-- Construction -->
-            <section class="section">
+            <section class="section" id="constrSection">
               <div class="section-label">КОНСТРУКЦИЯ И НАПОЛНЕНИЕ</div>
               <div class="grid2">
                 <label class="field">
@@ -235,8 +290,9 @@
             <button class="tab active" data-tab="assembly">Сборка <span class="tab-badge">3D</span></button>
             <button class="tab" data-tab="projections">Чертежи <span class="tab-badge">4 вида</span></button>
             <button class="tab" data-tab="parts">Детали <span class="tab-badge" id="tabPartsCount">—</span></button>
+            <button class="tab" data-tab="fasteners">Крепёж <span class="tab-badge">🔩</span></button>
             <button class="tab" data-tab="cutting">Раскрой <span class="tab-badge" id="tabSheetsCount">—</span></button>
-            <button class="tab" data-tab="estimate">Смекта</button>
+            <button class="tab" data-tab="estimate">Смета</button>
           </div>
 
           <div class="main-content">
@@ -248,6 +304,7 @@
                   <span class="view-dims" id="viewDims">800 × 2000 × 520</span>
                 </div>
                 <div class="toolbar-right">
+                  <button class="btn btn-small" id="btnFasteners" title="Показать отверстия под крепёж на гранях">🔩 Отверстия</button>
                   <button class="btn btn-small" id="btnRotate" title="Повернуть">⟲ Поворот</button>
                   <button class="btn btn-small" id="btnExplode" title="Разнести">✧ В разнос</button>
                   <select id="selView" class="select-small">
@@ -260,7 +317,9 @@
               <div class="canvas-wrap" id="assemblyCanvas">
                 <!-- SVG injected -->
               </div>
+              <div id="assemblyInfo"></div>
               <div class="canvas-legend" id="assemblyLegend"></div>
+              <div class="asm-hint">Кликните по детали в сборке или в списке «Детали», чтобы увидеть её позицию • повторный клик — карточка с развёрткой и разметкой отверстий</div>
             </div>
 
             <!-- PROJECTIONS TAB -->
@@ -280,13 +339,19 @@
                   <button class="btn btn-small" id="btnCopyList">⎘ Копировать</button>
                 </div>
               </div>
+              <div class="parts-hint" id="partsHint"></div>
               <div class="table-wrap">
                 <table class="parts-table" id="partsTable">
-                  <thead><tr><th>№</th><th>Деталь</th><th>Материал</th><th>Размер (Ш×В)</th><th>Толщ.</th><th>Кол-во</th><th>Кромка</th><th>Площадь</th></tr></thead>
+                  <thead><tr><th>№</th><th>Деталь</th><th>Материал</th><th>Размер (Ш×В)</th><th>Толщ.</th><th>Кол-во</th><th>Кромка</th><th>Площадь</th><th>📋</th></tr></thead>
                   <tbody></tbody>
                 </table>
               </div>
               <div class="parts-sketches" id="partsSketches"></div>
+            </div>
+
+            <!-- FASTENERS TAB -->
+            <div class="tab-panel" id="panel-fasteners">
+              <div id="jointsPanel"></div>
             </div>
 
             <!-- CUTTING TAB -->
@@ -307,14 +372,26 @@
         </main>
       </div>
 
-      <!-- MOBILE BOTTOM NAV -->
-      <nav class="mobile-nav">
-        <button class="mnav-btn active" data-tab="assembly">🏠 Сборка</button>
-        <button class="mnav-btn" data-tab="projections">📐 Чертёж</button>
-        <button class="mnav-btn" data-tab="parts">📋 Детали</button>
-        <button class="mnav-btn" data-tab="cutting">✂ Раскрой</button>
-      </nav>
+    <!-- MOBILE BOTTOM NAV -->
+    <nav class="mobile-nav">
+      <button class="mnav-btn active" data-tab="assembly">🏠 Сборка</button>
+      <button class="mnav-btn" data-tab="projections">📐 Чертёж</button>
+      <button class="mnav-btn" data-tab="parts">📋 Детали</button>
+      <button class="mnav-btn" data-tab="fasteners">🔩 Крепёж</button>
+      <button class="mnav-btn" data-tab="cutting">✂ Раскрой</button>
+    </nav>
+  </div>
+
+  <!-- МОДАЛКА ДЕТАЛИ: позиция + развёртка + крепёж -->
+  <div id="partModal" class="pm-overlay">
+    <div class="pm-card">
+      <div id="partModalBody"></div>
     </div>
+    <div class="pm-footer">
+      <button class="btn btn-primary pm-footer-btn" id="pmLocate">📍 Показать в сборке</button>
+      <button class="btn btn-ghost pm-footer-btn" id="pmClose" style="background:rgba(255,255,255,.12);color:#fff">Закрыть</button>
+    </div>
+  </div>
 
     <div id="toast" class="toast"></div>
     <script type="module" src="/src/main.js"></script>

@@ -200,3 +200,72 @@ input,select,button{font-family:inherit}
   .stepper-grid{grid-template-columns:1fr 1fr}
   .canvas-toolbar{flex-direction:column;align-items:stretch}
 }
+
+/* ===== Кликабельные детали в сборке ===== */
+.asm-click:hover{ filter:brightness(.92) }
+@keyframes hlpulse{ 0%,100%{opacity:1} 50%{opacity:.45} }
+.hl-pulse{ animation:hlpulse 1.15s ease-in-out infinite }
+.asm-hint{ margin-top:8px;font-size:11px;color:#64748b;text-align:center }
+
+/* info-строка выбранной детали */
+#assemblyInfo{ margin-top:10px }
+.asm-info-item{ background:#fff;border:1.5px solid var(--accent);border-radius:12px;padding:10px 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;box-shadow:0 4px 14px rgba(242,193,78,.25) }
+.asm-info-dot{ width:12px;height:12px;border-radius:50%;background:var(--accent);border:2px solid #a16207;flex-shrink:0 }
+.asm-info-name{ font-weight:800;color:var(--accent2) }
+.asm-info-dims{ font-family:'JetBrains Mono',monospace;font-size:12px;color:#334155;background:var(--panel2);padding:3px 8px;border-radius:8px }
+.asm-info-holes{ font-size:11px;color:#64748b;flex:1;min-width:120px }
+
+/* ===== Таблица деталей: кликабельные строки ===== */
+.parts-hint{ font-size:11px;color:#64748b;background:#fff;border:1px dashed var(--line2);border-radius:10px;padding:8px 10px;margin-bottom:10px }
+.parts-table tr.row-clickable{ cursor:pointer }
+.parts-table tr.row-clickable:hover td{ background:#fef9e7 !important }
+.parts-table tr.row-selected td{ background:#fde68a !important }
+.part-open-cell{ text-align:center }
+.part-open-btn{ border:1px solid var(--line2);background:#fff;border-radius:8px;width:32px;height:30px;cursor:pointer;font-size:14px }
+.part-open-btn:hover{ background:var(--accent);border-color:#a16207 }
+.parts-table tr.row-selected .part-open-btn{ background:var(--accent) }
+.part-sketch.sketch-clickable{ cursor:pointer;transition:.15s }
+.part-sketch.sketch-clickable:hover{ border-color:var(--accent);transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.08) }
+.part-sketch.sketch-selected{ border-color:var(--accent);box-shadow:0 0 0 2px rgba(242,193,78,.5) }
+
+/* ===== Модалка карточки детали ===== */
+.pm-overlay{ position:fixed;inset:0;background:rgba(15,30,24,.55);backdrop-filter:blur(3px);z-index:50;display:none;overflow:auto;padding:20px 12px 80px }
+.pm-overlay.open{ display:block;animation:fade .18s ease }
+.pm-card{ max-width:1060px;margin:0 auto;background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.35) }
+.pm-head{ background:linear-gradient(135deg,#1e3a2f,#2a5a45);color:#fff;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px }
+.pm-title{ font-size:18px;font-weight:800 }
+.pm-count{ color:var(--accent);font-weight:800 }
+.pm-sub{ font-size:12px;opacity:.85;margin-top:4px;font-family:'JetBrains Mono',monospace }
+.pm-grid{ display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:16px }
+.pm-block{ background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:12px;min-width:0 }
+.pm-block-wide{ grid-column:1 / -1 }
+.pm-block-title{ font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--accent2);margin-bottom:10px }
+.pm-pos svg,.pm-flat svg{ max-width:100%;height:auto;display:block }
+.pm-flat{ background:#fff;border:1px solid var(--line);border-radius:10px;padding:6px }
+.pm-table-wrap{ overflow:auto;background:#fff;border:1px solid var(--line);border-radius:10px }
+.pm-table{ width:100%;border-collapse:collapse;font-size:12px;min-width:520px }
+.pm-table th{ background:var(--accent2);color:#fff;padding:8px 10px;text-align:left;font-size:10px;letter-spacing:.06em;text-transform:uppercase }
+.pm-table td{ padding:8px 10px;border-bottom:1px solid var(--line);font-weight:600 }
+.pm-table tr:nth-child(even) td{ background:#fafaf9 }
+.hole-chip{ display:inline-block;border:1.5px solid;border-radius:99px;padding:2px 8px;font-size:11px;font-weight:800;background:#fff }
+.pm-joint{ background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px }
+.pm-joint-title{ font-weight:800;font-size:13px;color:var(--accent2) }
+.pm-joint-sub{ font-size:12px;color:#475569;margin-top:3px }
+.pm-joint-fast{ margin-top:6px;display:flex;gap:6px;flex-wrap:wrap }
+.pm-joint-note{ margin-top:6px;font-size:11px;color:#92400e;background:#fffbeb;border-radius:8px;padding:6px 8px }
+.pm-empty{ font-size:12px;color:#64748b;padding:10px;background:#fff;border:1px dashed var(--line2);border-radius:10px;text-align:center }
+.pm-footer{ position:sticky;bottom:0;display:flex;gap:10px;justify-content:center;padding:14px;background:rgba(255,255,255,0);margin-top:10px;max-width:1060px;margin-left:auto;margin-right:auto }
+.pm-footer-btn{ min-width:200px }
+.pm-footer .btn-primary{ width:auto;padding:12px 18px }
+.pm-footer .btn-ghost{ width:auto;padding:12px 18px }
+
+/* ===== Вкладка «Крепёж» ===== */
+.joints-totals{ display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:14px }
+.joints-section-title{ font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent2);margin:4px 0 8px;opacity:.85 }
+.joint-row{ cursor:pointer }
+.joint-row:hover td{ background:#fef9e7 !important }
+
+/* ===== Металл ===== */
+.metal-cut-card{ background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:var(--shadow);margin-bottom:16px }
+.metal-cut-table{ min-width:560px }
+.metal-cut-note{ padding:10px 14px;background:#eff6ff;border-top:1px solid #bfdbfe;font-size:12px;color:#1e40af;line-height:1.5 }

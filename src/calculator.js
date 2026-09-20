@@ -24,6 +24,25 @@ export function getMaterial(key, customT){
 }
 
 /**
+ * Квадратные (прямоугольные) трубы для металлической рамы.
+ * a×b — сечение, wall — толщина стенки, kgm — вес 1 м, price — цена $/м
+ */
+export const METAL_PROFILES = {
+  '20x20': { a: 20, b: 20, wall: 1.5, kgm: 0.87, price: 4.5 },
+  '30x30': { a: 30, b: 30, wall: 2,   kgm: 1.76, price: 6.0 },
+  '40x20': { a: 40, b: 20, wall: 2,   kgm: 1.76, price: 6.5 },
+  '40x40': { a: 40, b: 40, wall: 2,   kgm: 2.39, price: 8.5 },
+  '50x25': { a: 50, b: 25, wall: 2,   kgm: 2.23, price: 7.5 },
+  '60x30': { a: 60, b: 30, wall: 2,   kgm: 2.70, price: 9.5 },
+}
+export const DEFAULT_METAL_PROFILE = '40x20'
+
+export function getMetalProfile(key, customWall){
+  const pr = METAL_PROFILES[key] || METAL_PROFILES[DEFAULT_METAL_PROFILE]
+  return { ...pr, wall: customWall || pr.wall }
+}
+
+/**
  * Основная функция расчёта
  * params = { type, H,W,D, t, materialKey, sheetW,sheetH, rear, base, construction, shelfMount, shelves, doors, drawers, partitions, gapFacade, shelfInset, edge, ... }
  */
@@ -327,6 +346,47 @@ export function calculate(params){
       }
       break
     }
+    case 'metal': {
+      // ===== Металлическая рама из прямоугольного профиля =====
+      const prof = getMetalProfile(p.metalProfile, p.metalWall)
+      const pw = prof.a, ph = prof.b
+      const L = clamp(Number(p.metalLevels)||3, 2, 6)
+      const nDiv = clamp(Number(p.metalDividers)||0, 0, 4)
+      const matLabel = `Профиль ${pw}×${ph}×${prof.wall}`
+      const addM = (name, len, count, opts={})=>{
+        if(len<=0 || !count) return
+        parts.push({
+          id: id++,
+          name, w: Math.round(len), h: 0, wCut: Math.round(len), hCut: 0,
+          count, material: matLabel, thickness: prof.wall, edge: '',
+          note: opts.note || '', group: opts.group || 'рама',
+          kind: 'metal', section: `${pw}×${ph}×${prof.wall}`,
+          kgm: prof.kgm, priceM: prof.price,
+          area: 0
+        })
+      }
+      // Стойки — 4 по углам, полная высота
+      addM('Стойка', p.H, 4, { note: '4 угла, полная высота H' })
+      // Рамы на каждом уровне: фронт/бэк (W - 2pw) и боковые (D - 2ph)
+      addM('Рама фронт/бэк', p.W - 2*pw, 2*L, { note: 'по 2 на уровень (фасад + зад)' })
+      addM('Рама боковая', p.D - 2*ph, 2*L, { note: 'по 2 на уровень (лево + право)' })
+      // Перегородки
+      if(nDiv>0){
+        addM('Перегородка', p.H - 2*pw, nDiv, { note: 'по всей высоте между рамами' })
+      }
+      // Листовые полки на уровнях (кроме верхнего)
+      if(p.metalShelves){
+        const cols = nDiv + 1
+        const cW = Math.floor((p.W - 2*pw - nDiv*ph) / cols) - 2
+        const shH = p.D - 2*ph - 2
+        add('Полка', cW, shH, (L-1)*cols, { edge:'-', group:'наполнение', note:'на '+(L-1)+' уровнях'+(nDiv>0?', по секциям':'') })
+      }
+      // Задняя стенка
+      if(p.metalRear){
+        add('Задняя стенка ДВП', p.W - 2*pw - 4, p.H - 2*pw - 4, 1, { material:'ДВП 3.2 мм', thickness:3.2, edge:'-', group:'корпус' })
+      }
+      break
+    }
   }
 
   // Общие расчёты
@@ -375,7 +435,15 @@ function normalize(params){
     edge: Number(params.edge)||1,
     tableSupport: params.tableSupport || 'panels',
     polkaType: params.polkaType || 'simple',
-    priceM2: mat.priceM2
+    priceM2: mat.priceM2,
+    // металлическая рама
+    metalProfile: params.metalProfile || '40x20',
+    metalWall: Number(params.metalWall) || 0,
+    metalLevels: clamp(Number(params.metalLevels)||3, 2, 6),
+    metalDividers: clamp(Number(params.metalDividers)||0, 0, 4),
+    metalShelves: params.metalShelves !== false,
+    metalRear: !!params.metalRear,
+    _profile: getMetalProfile(params.metalProfile || '40x20', Number(params.metalWall) || 0)
   }
 }
 function clamp(v,min,max){ return Math.max(min, Math.min(max,v)) }
