@@ -250,6 +250,17 @@ function bindUI(){
       switchTab(tab)
     })
   })
+
+  // mobile: переключатель «Параметры / Результат» (виден при ширине ≤980px)
+  const viewSwitch = $('#viewSwitch')
+  if(viewSwitch){
+    viewSwitch.addEventListener('click', e=>{
+      const b = e.target.closest('button[data-view]')
+      if(!b) return
+      document.body.classList.toggle('view-params', b.dataset.view==='params')
+      viewSwitch.querySelectorAll('button').forEach(x=> x.classList.toggle('active', x===b))
+    })
+  }
 }
 
 function syncFastenerBtn(){
