@@ -6,10 +6,10 @@
 const KERF = 3 // пропил
 
 export function packParts(parts, sheetW, sheetH){
-  // Фильтруем только основной материал (толщина >=8 и не ДВП)
-  const mainParts = parts.filter(p=> p.thickness >= 8 && !p.material.includes('ДВП') )
-  // ДВП отдельно
-  const dvpParts = parts.filter(p=> p.material.includes('ДВП') || p.thickness < 5)
+  // ДВП / тонкий лист — отдельный раскрой, остальное — основной материал
+  const isDvp = p => p.material.includes('ДВП') || p.thickness < 5
+  const mainParts = parts.filter(p => !isDvp(p))
+  const dvpParts = parts.filter(isDvp)
 
   // разворачиваем count в отдельные экземпляры
   const expand = (list) => {
@@ -31,15 +31,12 @@ export function packParts(parts, sheetW, sheetH){
   }
 
   const sheetsMain = packList(expand(mainParts), sheetW, sheetH, 'ЛДСП')
-  const sheetsDvp = dvpParts.length ? packList(expand(dvpParts), sheetW, sheetH, 'ДВП', true) : []
-
-  // для ДВП используем тот же размер листа по умолчанию 2800x2070 или 2500x1250 — но можем взять исходный
-  // если ДВП - берём лист 2800x2070 тоже (или 2500*1250), оставим как есть
+  const sheetsDvp = dvpParts.length ? packList(expand(dvpParts), sheetW, sheetH, 'ДВП') : []
 
   return { sheetsMain, sheetsDvp, totalSheets: sheetsMain.length + sheetsDvp.length }
 }
 
-function packList(items, sheetW, sheetH, groupLabel, isDvp=false){
+function packList(items, sheetW, sheetH, groupLabel){
   if(!items.length) return []
   // сортировка по убыванию высоты, затем ширины, затем площади
   items.sort((a,b)=> (b.h - a.h) || (b.w - a.w) || (b.w*b.h - a.w*a.h))
@@ -133,7 +130,7 @@ function tryPlace(sheet, item){
       item.rotated = true
       const w = item.h, h = item.w
       shelf.x += w + kerf
-      sheet.items.push({...item, x:item.x, y:item.y, w, h, rotated:true, origW:item.w, origH:item.h})
+      sheet.items.push({...item, x:item.x, y:item.y, w, h, rotated:true})
       return true
     }
   }
@@ -187,9 +184,7 @@ function tryPlace(sheet, item){
     y: shelf.y,
     w: newW,
     h: newH,
-    rotated: useRotated,
-    origW: item.w,
-    origH: item.h
+    rotated: useRotated
   })
   return true
 }

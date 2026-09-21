@@ -1,5 +1,5 @@
 /**
- * Конструктор мебели — логика расчёта раскроя
+ * Конструктор мебели — логика расчёта деталей и раскроя
  * Поддерживает: шкаф, тумба, стойка, стол, полка
  * Учитывает толщину материала, зазоры, кромку, тип сборки
  */
@@ -23,27 +23,60 @@ export function getMaterial(key, customT){
   return { ...m, t: customT || m.t }
 }
 
+function num(v, def){
+  const n = Number(v)
+  return Number.isFinite(n) ? n : def
+}
+function clamp(v, min, max){ return Math.max(min, Math.min(max, num(v, min))) }
+
+/**
+ * Зоны фасадов — общая логика для расчёта деталей и эскизов.
+ * Ящики — нижняя зона над цоколем, двери — сверху (фасады не перекрывают друг друга).
+ * Тумба без дверей: ящики на весь фасад.
+ * Размеры в мм.
+ */
+export function facadeZones(params){
+  const H = clamp(num(params.H, 2000), 200, 3000)
+  const W = clamp(num(params.W, 800), 150, 3000)
+  const GAP = clamp(num(params.gapFacade, 3), 0, 10)
+  const baseH = params.base ? 80 : 0
+  const drawers = clamp(params.drawers, 0, 8)
+  const doors = clamp(params.doors, 0, 6)
+
+  let drawerZoneH = 0
+  if(drawers > 0){
+    const bottomZone = Math.min(drawers * 180 + (drawers + 1) * GAP, Math.round(H * 0.45))
+    drawerZoneH = (params.type === 'tumba' && doors === 0) ? (H - baseH) : bottomZone
+  }
+  const drawerH = drawers > 0 ? (drawerZoneH - (drawers + 1) * GAP) / drawers : 0
+  const doorH = doors > 0 ? Math.max(H - baseH - drawerZoneH - 2 * GAP, 10) : 0
+  const doorW = doors > 0 ? (W - (doors + 1) * GAP) / doors : 0
+
+  return { H, W, GAP, baseH, drawers, doors, drawerZoneH, drawerH, doorH, doorW }
+}
+
 /**
  * Основная функция расчёта
  * params = { type, H,W,D, t, materialKey, sheetW,sheetH, rear, base, construction, shelfMount, shelves, doors, drawers, partitions, gapFacade, shelfInset, edge, ... }
+ * edge — припуск на кромку в мм (0 = без кромки); к чистовому размеру добавляется
+ * с той стороны(ах), где наклеивается кромка (припуск идёт на раскрой в wCut/hCut).
  */
 export function calculate(params){
   const p = normalize(params)
   const t = p.t
   const GAP_F = p.gapFacade
   const SHELF_INSET = p.shelfInset
+  const EA = p.edge // припуск на кромку, мм
   const parts = []
   let id = 1
   const add = (name, w, h, count=1, opts={})=>{
     if(w<=0 || h<=0) return
-    // кромка: прибавка уже учтена? размеры деталей указаны чистовые (без кромки), а для раскроя добавим припуск edge
-    // здесь w,h - чистовые
+    // w,h — чистовые размеры; edgeX/edgeY — припуск на кромку для раскроя
     parts.push({
       id: id++,
       name,
       w: Math.round(w),
       h: Math.round(h),
-      // для раскроя используем wCut/hCut с кромкой
       wCut: Math.round(w + (opts.edgeX||0)),
       hCut: Math.round(h + (opts.edgeY||0)),
       count,
@@ -52,287 +85,222 @@ export function calculate(params){
       edge: opts.edge || '',
       note: opts.note || '',
       group: opts.group || 'корпус',
-      // для сортировки
       area: Math.round(w*h)
     })
   }
 
   // общие величины
-  const innerW_inset = p.W - 2*t
-  const innerH_inset = p.H - 2*t // if inset top/bottom
-  const innerW_overlay = p.W // if overlay, inner width still W-2t for shelves
-  const innerW = p.construction === 'inset' ? innerW_inset : p.W - 2*t
-  const sideH_inset = p.H
-  const sideH_overlay = p.H - t // крыша сверху, дно снизу? упростим: боковины = H - t (если крыша накладная, дно между боковин)
-  // для overlay: крыша и дно накладные: W x D, боковины H - t (дно между боковин, крыша сверху) либо H -2t если обе накладные
-  // выберем вариант: overlay = обе накладные => боковины H-2t
-  const sideH = p.construction === 'inset' ? p.H - (p.base?80:0) : p.H - 2*t - (p.base?0:0)
-  // цоколь
+  const innerW = p.W - 2*t
   const baseH = p.base ? 80 : 0
 
   // type-specific
   switch(p.type){
     case 'shkaf': {
-      // Боковины
-      const sideHeight = p.construction === 'inset' ? p.H - baseH : p.H - 2*t - baseH // if base, боковины стоят на цоколе? упростим
-      // Actually if base, боковины full height, цоколь - планка между ними спереди
-      const sideH_final = p.H - baseH
-      // Но чтобы не усложнять, делаем боковины H x D, а цоколь отдельной планкой
-      // Пересмотрим: боковины всегда H x D (если без цоколя), если с цоколем - боковины H x D, цоколь внутри
-      // Для простоты: боковины = H x D, крыша/дно между или сверху
-      const bokH = p.H
-      const bokD = p.D
-      add('Боковина левая', bokD, bokH, 1, { edge: '2 длинных', group:'корпус', note: p.construction==='inset'?'паз под заднюю стенку 10мм':'' })
-      add('Боковина правая', bokD, bokH, 1, { edge: '2 длинных', group:'корпус' })
+      const fz = facadeZones(p)
+      // Боковины: кромка на передней и задней кромках (2 длинных) → припуск по глубине
+      add('Боковина левая', p.D, p.H, 1, { edge: '2 длинных', edgeX: 2*EA, group:'корпус', note: p.construction==='inset'?'паз под заднюю стенку 10мм':'' })
+      add('Боковина правая', p.D, p.H, 1, { edge: '2 длинных', edgeX: 2*EA, group:'корпус' })
 
       // Крыша и дно
       if(p.construction === 'inset'){
-        add('Крыша', innerW, p.D, 1, { edge: 'перед', group:'корпус' })
-        add('Дно', innerW, p.D, 1, { edge: 'перед', group:'корпус' })
+        add('Крыша', innerW, p.D, 1, { edge: 'перед', edgeY: EA, group:'корпус' })
+        add('Дно', innerW, p.D, 1, { edge: 'перед', edgeY: EA, group:'корпус' })
       }else{
-        add('Крыша накладная', p.W, p.D, 1, { edge: 'по периметру', group:'корпус' })
-        add('Дно накладное', p.W, p.D, 1, { edge: 'перед', group:'корпус' })
+        add('Крыша накладная', p.W, p.D, 1, { edge: 'по периметру', edgeX: 2*EA, edgeY: 2*EA, group:'корпус' })
+        add('Дно накладное', p.W, p.D, 1, { edge: 'перед', edgeY: EA, group:'корпус' })
       }
 
       // Цоколь
       if(p.base){
-        add('Цоколь фронтальный', innerW, 80, 1, { edge: 'перед', group:'корпус', note:'отступ 20мм от фасада' })
-        // боковые цоколи опционально
-        // add('Цоколь боковой', p.D-20, 80, 2, { group:'корпус'})
+        add('Цоколь фронтальный', innerW, 80, 1, { edge: 'перед', edgeY: EA, group:'корпус', note:'отступ 20мм от фасада' })
       }
 
-      // Перегородка вертикальная
-      if(p.partitions>0){
-        for(let i=0;i<p.partitions;i++){
-          const partH = p.construction==='inset' ? p.H - 2*t - baseH : p.H - 2*t - baseH
-          // Actually перегородка между крышей и дном
-          const h = p.H - 2*t - baseH
-          add(`Перегородка ${i+1}`, p.D - 10, h, 1, { edge:'перед', group:'корпус' })
-        }
+      // Перегородки вертикальные (кромка «перед» — по высоте → припуск по глубине)
+      for(let i=0;i<p.partitions;i++){
+        add(`Перегородка ${i+1}`, p.D - 10, p.H - 2*t - baseH, 1, { edge:'перед', edgeX: EA, group:'корпус' })
       }
 
-      // Полки
-      // Если есть перегородки, ширина полки делится
+      // Полки: ширина секции делится перегородками
       const sections = p.partitions + 1
-      const shelfW_full = innerW - GAP_F // minus gaps
-      const shelfW = sections>1 ? Math.floor((innerW - p.partitions*t)/sections) - 2 : innerW - 4 // -2 зазор с каждой стороны, -20 от фасада по глубине
-      const shelfD = p.D - SHELF_INSET - (p.rear? 4:0) // отступ от задней стенки
+      const shelfW = sections > 1
+        ? Math.floor((innerW - p.partitions*t)/sections) - 2
+        : (p.shelfMount === 'overlay' ? p.W - 2 : innerW - 4)
+      const shelfD = p.D - SHELF_INSET - (p.rear ? 4 : 0) // отступ от задней стенки
       for(let i=0;i<p.shelves;i++){
         if(sections>1){
-          // по полке в каждую секцию
           for(let s=0;s<sections;s++){
-            add(`Полка ${i+1}.${s+1}`, shelfW, shelfD, 1, { edge:'перед', group:'наполнение' })
+            add(`Полка ${i+1}.${s+1}`, shelfW, shelfD, 1, { edge:'перед', edgeY: EA, group:'наполнение' })
           }
         }else{
-          add(`Полка ${i+1}`, shelfW, shelfD, 1, { edge:'перед', group:'наполнение' })
+          add(`Полка ${i+1}`, shelfW, shelfD, 1, { edge:'перед', edgeY: EA, group:'наполнение' })
         }
       }
 
       // Задняя стенка ДВП
       if(p.rear){
-        const rearW = p.W - 6
-        const rearH = p.H - baseH - 6
-        add('Задняя стенка ДВП', rearW, rearH, 1, { material: 'ДВП 3.2 мм', thickness: 3.2, edge:'-', group:'корпус', note: 'в паз 10мм или накладная на гвозди' })
+        add('Задняя стенка ДВП', p.W - 6, p.H - baseH - 6, 1, { material: 'ДВП 3.2 мм', thickness: 3.2, edge:'-', group:'корпус', note: 'в паз 10мм или накладная на гвозди' })
       }
 
-      // Двери
-      if(p.doors>0){
-        const doorGap = GAP_F
-        const totalGap = doorGap * (p.doors + 1)
-        const doorW = (p.W - totalGap)/p.doors
-        const doorH = p.H - baseH - doorGap*2
-        // если цоколь есть, дверь выше цоколя
-        for(let i=0;i<p.doors;i++){
-          add(`Дверь ${i+1} фасад`, doorW, doorH, 1, { material: p.materialLabel, thickness: t, edge:'по периметру', group:'фасады', note:'зазор 3мм, петля накладная 35мм' })
-        }
+      // Двери — верхняя зона (над ящиками, если они есть)
+      for(let i=0;i<p.doors;i++){
+        add(`Дверь ${i+1} фасад`, fz.doorW, fz.doorH, 1, { edge:'по периметру', edgeX: 2*EA, edgeY: 2*EA, group:'фасады', note:`зазор ${GAP_F}мм, петля накладная 35мм` })
       }
 
-      // Ящики (шуфлядки)
+      // Ящики (шуфлядки) — нижняя зона
       if(p.drawers>0){
-        // Ящики внизу, под полками/дверями. Высота фасада ящика
-        // Если есть двери, ящики - внутренние или фасадные? Сделаем фасадные ящики внизу шкафа, двери выше или наоборот?
-        // Упростим: ящики занимают нижнюю часть корпуса высотой drawers * 180 + gaps
-        const drawerSectionH = p.drawers * 180 + (p.drawers+1)*GAP_F // estimate
-        // Но для фасадов ящиков: делим высоту
-        const availableH_forDrawers = Math.min(drawerSectionH, p.H*0.45) // limit
-        const facadeH = (availableH_forDrawers - (p.drawers+1)*GAP_F)/p.drawers
-        const facadeW = innerW + 2*t - (p.doors>0? 0 : 2*GAP_F) // actually фасад ящика = ширина корпуса - зазоры
-        // корректнее: facadeW = p.W - 2*GAP_F
         const fW = p.W - 2*GAP_F
         for(let i=0;i<p.drawers;i++){
-          add(`Фасад ящика ${i+1}`, fW, facadeH, 1, { edge:'по периметру', group:'фасады', note:'зазор 3мм' })
+          add(`Фасад ящика ${i+1}`, fW, fz.drawerH, 1, { edge:'по периметру', edgeX: 2*EA, edgeY: 2*EA, group:'фасады', note:`зазор ${GAP_F}мм` })
           // Короб ящика: 2 боковины, перед/зад, дно ДВП
-          const boxW = fW - 40 // минус направляющие 13мм с каждой + зазор
+          const boxW = fW - 40 // минус направляющие и зазоры
           const boxD = p.D - 40
-          const boxH = 120 // высота боковины ящика (зависит от фасада, но фиксируем 120)
-          // Боковины ящика
-          add(`Боковина ящика ${i+1} L/R`, boxD, boxH, 2, { material: p.materialLabel, thickness: t, edge:'-', group:'ящики', note:'сверление под направляющие' })
-          add(`Перед/зад ящика ${i+1}`, boxW - 2*t, boxH, 2, { material: p.materialLabel, thickness: t, edge:'-', group:'ящики' })
+          const boxH = 120
+          add(`Боковина ящика ${i+1} L/R`, boxD, boxH, 2, { group:'ящики', note:'сверление под направляющие' })
+          add(`Перед/зад ящика ${i+1}`, boxW - 2*t, boxH, 2, { group:'ящики' })
           add(`Дно ящика ${i+1} ДВП`, boxW, boxD, 1, { material:'ДВП 3.2 мм', thickness:3.2, edge:'-', group:'ящики', note:'в паз 6мм' })
         }
       }
-
       break
     }
     case 'tumba': {
-      // Тумба: высота 400-800, ширина любая, глубина 350-520
-      const Ht = Math.min(p.H, 900)
-      add('Боковина левая', p.D, Ht, 1, { edge:'2 длинных', group:'корпус' })
-      add('Боковина правая', p.D, Ht, 1, { edge:'2 длинных', group:'корпус' })
+      // Тумба / комод
+      const fz = facadeZones(p)
+      add('Боковина левая', p.D, p.H, 1, { edge:'2 длинных', edgeX: 2*EA, group:'корпус' })
+      add('Боковина правая', p.D, p.H, 1, { edge:'2 длинных', edgeX: 2*EA, group:'корпус' })
       if(p.construction==='inset'){
-        add('Крыша', innerW, p.D, 1, { edge:'перед', group:'корпус' })
-        add('Дно', innerW, p.D, 1, { edge:'перед', group:'корпус' })
+        add('Крыша', innerW, p.D, 1, { edge:'перед', edgeY: EA, group:'корпус' })
+        add('Дно', innerW, p.D, 1, { edge:'перед', edgeY: EA, group:'корпус' })
       }else{
-        add('Крыша накладная', p.W, p.D, 1, { edge:'по периметру', group:'корпус' })
-        add('Дно накладное', innerW, p.D, 1, { edge:'перед', group:'корпус' })
+        add('Крыша накладная', p.W, p.D, 1, { edge:'по периметру', edgeX: 2*EA, edgeY: 2*EA, group:'корпус' })
+        add('Дно накладное', p.W, p.D, 1, { edge:'перед', edgeY: EA, group:'корпус' })
       }
       if(p.base){
-        add('Цоколь', innerW, 60, 1, { edge:'перед', group:'корпус' })
+        add('Цоколь', innerW, 80, 1, { edge:'перед', edgeY: EA, group:'корпус' })
       }
-      if(p.partitions>0){
-        for(let i=0;i<p.partitions;i++){
-          add(`Перегородка ${i+1}`, p.D-10, Ht-2*t- (p.base?60:0), 1, { edge:'перед', group:'корпус' })
-        }
+      for(let i=0;i<p.partitions;i++){
+        add(`Перегородка ${i+1}`, p.D-10, p.H - 2*t - baseH, 1, { edge:'перед', edgeX: EA, group:'корпус' })
       }
       // Полки
       const sections = p.partitions+1
-      const shelfW = sections>1 ? Math.floor((innerW - p.partitions*t)/sections)-2 : innerW -4
+      const shelfW = sections > 1
+        ? Math.floor((innerW - p.partitions*t)/sections) - 2
+        : (p.shelfMount === 'overlay' ? p.W - 2 : innerW - 4)
       const shelfD = p.D - SHELF_INSET
       for(let i=0;i<p.shelves;i++){
         for(let s=0;s<sections;s++){
-          add(`Полка ${i+1}${sections>1?'.'+(s+1):''}`, shelfW, shelfD, 1, { edge:'перед', group:'наполнение' })
+          add(`Полка ${i+1}${sections>1?'.'+(s+1):''}`, shelfW, shelfD, 1, { edge:'перед', edgeY: EA, group:'наполнение' })
         }
       }
       if(p.rear){
-        add('Задняя стенка ДВП', p.W-6, Ht-6, 1, { material:'ДВП 3.2 мм', thickness:3.2, edge:'-', group:'корпус' })
+        add('Задняя стенка ДВП', p.W-6, p.H-6, 1, { material:'ДВП 3.2 мм', thickness:3.2, edge:'-', group:'корпус' })
       }
-      // Фасады: двери или ящики
-      if(p.doors>0 && p.drawers===0){
-        const doorW = (p.W - (p.doors+1)*GAP_F)/p.doors
-        const doorH = Ht - (p.base?60:0) - 2*GAP_F
-        for(let i=0;i<p.doors;i++) add(`Дверь ${i+1}`, doorW, doorH, 1, { edge:'по периметру', group:'фасады' })
-      }else if(p.drawers>0){
-        // Тумба с ящиками: делим высоту на ящики
-        const availH = Ht - (p.base?60:0) - (p.drawers+1)*GAP_F
-        const fH = availH / p.drawers
+      // Фасады: ящики внизу, двери сверху
+      if(p.drawers>0){
         const fW = p.W - 2*GAP_F
         for(let i=0;i<p.drawers;i++){
-          add(`Фасад ящика ${i+1}`, fW, fH, 1, { edge:'по периметру', group:'фасады' })
+          add(`Фасад ящика ${i+1}`, fW, fz.drawerH, 1, { edge:'по периметру', edgeX: 2*EA, edgeY: 2*EA, group:'фасады' })
           const boxW = innerW - 26
           const boxD = p.D - 30
-          const boxH = Math.min(120, fH-30)
+          const boxH = Math.max(40, Math.min(120, fz.drawerH - 30))
           add(`Боковина ящика ${i+1}`, boxD, boxH, 2, { group:'ящики' })
           add(`Перед/зад ящика ${i+1}`, boxW, boxH, 2, { group:'ящики' })
           add(`Дно ящика ${i+1} ДВП`, boxW+2*t, boxD, 1, { material:'ДВП 3.2 мм', thickness:3.2, group:'ящики' })
         }
-        // Если и двери и ящики: двери сверху, ящики снизу - сложно, пока только ящики
-        if(p.doors>0){
-          // add doors on top section: половина высоты?
-        }
-      }else{
-        // открытая тумба без фасадов - ничего
+      }
+      for(let i=0;i<p.doors;i++){
+        add(`Дверь ${i+1}`, fz.doorW, fz.doorH, 1, { edge:'по периметру', edgeX: 2*EA, edgeY: 2*EA, group:'фасады' })
       }
       break
     }
     case 'stoyka': {
       // Стеллаж открытый
-      add('Стойка левая', p.D, p.H, 1, { edge:'2 длинных', group:'корпус' })
-      add('Стойка правая', p.D, p.H, 1, { edge:'2 длинных', group:'корпус' })
+      add('Стойка левая', p.D, p.H, 1, { edge:'2 длинных', edgeX: 2*EA, group:'корпус' })
+      add('Стойка правая', p.D, p.H, 1, { edge:'2 длинных', edgeX: 2*EA, group:'корпус' })
       if(p.construction==='inset'){
-        add('Крыша', innerW, p.D, 1, { edge:'перед', group:'корпус' })
-        add('Дно', innerW, p.D, 1, { edge:'перед', group:'корпус' })
+        add('Крыша', innerW, p.D, 1, { edge:'перед', edgeY: EA, group:'корпус' })
+        add('Дно', innerW, p.D, 1, { edge:'перед', edgeY: EA, group:'корпус' })
       }else{
-        add('Крыша накладная', p.W, p.D, 1, { edge:'по периметру', group:'корпус' })
-        add('Дно накладное', p.W, p.D, 1, { edge:'перед', group:'корпус' })
+        add('Крыша накладная', p.W, p.D, 1, { edge:'по периметру', edgeX: 2*EA, edgeY: 2*EA, group:'корпус' })
+        add('Дно накладное', p.W, p.D, 1, { edge:'перед', edgeY: EA, group:'корпус' })
       }
-      // Полки внутренние + maybe дополнительные
-      const shelfW = innerW - 2
+      // Полки внутренние
+      const shelfW = p.shelfMount === 'overlay' ? p.W - 2 : innerW - 2
       const shelfD = p.D - SHELF_INSET
       for(let i=0;i<p.shelves;i++){
-        add(`Полка ${i+1}`, shelfW, shelfD, 1, { edge:'перед', group:'наполнение' })
+        add(`Полка ${i+1}`, shelfW, shelfD, 1, { edge:'перед', edgeY: EA, group:'наполнение' })
       }
       if(p.rear){
-        add('Задняя стенка ДВП / ХДФ', p.W-4, p.H-4, 1, { material:'ДВП 3.2 мм', thickness:3.2, group:'корпус' })
-        // или крестовина жесткости
+        add('Задняя стенка ДВП / ХДФ', p.W-4, p.H-4, 1, { material:'ДВП 3.2 мм', thickness:3.2, edge:'-', group:'корпус' })
       }else{
-        // для жесткости - царга/планка сзади
-        add('Царга жесткости задняя', innerW, 100, 1, { edge:'-', group:'корпус', note:'под верхом' })
+        // для жёсткости — царги сзади
+        add('Царга жесткости задняя верх', innerW, 100, 1, { edge:'-', group:'корпус', note:'под верхом' })
         add('Царга жесткости задняя низ', innerW, 100, 1, { edge:'-', group:'корпус' })
       }
-      if(p.partitions>0){
-        for(let i=0;i<p.partitions;i++) add(`Перегородка ${i+1}`, p.D-10, p.H-2*t, 1, { group:'корпус' })
+      for(let i=0;i<p.partitions;i++){
+        add(`Перегородка ${i+1}`, p.D-10, p.H-2*t, 1, { edge:'перед', edgeX: EA, group:'корпус' })
       }
       break
     }
     case 'stol': {
       // Стол
-      const tableT = Math.max(t, 22) // столешница толще
-      // Столешница всегда накладная
-      add('Столешница', p.W, p.D, 1, { thickness: tableT, edge:'по периметру', group:'корпус', note:'свес 20мм по бокам' })
+      const tableT = Math.max(t, 22) // столешница толще корпуса
+      add('Столешница', p.W, p.D, 1, { thickness: tableT, edge:'по периметру', edgeX: 2*EA, edgeY: 2*EA, group:'корпус', note:'свес 20мм по бокам' })
       const legH = p.H - tableT
       const isLegs = p.tableSupport === 'legs'
       if(isLegs){
-        // 4 ножки - если из материала, делаем боковины-ножки 2 шт + царги. Иначе металл - не считаем.
-        // Даём опцию: ножки из ЛДСП 2 шт + царга
-        // Пока делаем царги
+        // Металлические ножки — не в раскрое, только царги из ЛДСП
         add('Царга фронтальная', innerW, 120, 1, { edge:'-', group:'корпус', note:'под столешницей' })
         add('Царга задняя', innerW, 120, 1, { edge:'-', group:'корпус' })
         add('Царга боковая', p.D-40, 120, 2, { edge:'-', group:'корпус' })
-        // Ножки металлические - не в раскрое, но показываем в смете
       }else{
-        // Опоры - боковины ЛДСП
-        add('Боковина-опора левая', p.D-20, legH, 1, { edge:'2 длинных', group:'корпус' })
-        add('Боковина-опора правая', p.D-20, legH, 1, { edge:'2 длинных', group:'корпус' })
+        // Опоры — боковины ЛДСП
+        add('Боковина-опора левая', p.D-20, legH, 1, { edge:'2 длинных', edgeX: 2*EA, group:'корпус' })
+        add('Боковина-опора правая', p.D-20, legH, 1, { edge:'2 длинных', edgeX: 2*EA, group:'корпус' })
         add('Царга фронтальная', innerW, 120, 1, { edge:'-', group:'корпус' })
         add('Царга задняя', innerW, 100, 1, { edge:'-', group:'корпус' })
         if(p.shelves>0){
-          add('Полка подстольная', innerW-10, p.D-80, 1, { edge:'перед', group:'наполнение', note:'на 200мм от пола' })
+          add('Полка подстольная', innerW-10, p.D-80, 1, { edge:'перед', edgeY: EA, group:'наполнение', note:'на 200мм от пола' })
         }
       }
       // Ящики для стола
-      if(p.drawers>0){
-        const fW = 400 // ширина ящика
+      for(let i=0;i<p.drawers;i++){
+        const fW = 400 // ширина ящика стола
         const fH = 140
-        for(let i=0;i<p.drawers;i++){
-          add(`Фасад ящика стола ${i+1}`, fW, fH, 1, { edge:'по периметру', group:'фасады' })
-          add(`Боковина ящика стола ${i+1}`, p.D-80, 100, 2, { group:'ящики' })
-          add(`Перед/зад ящика стола ${i+1}`, fW-26, 100, 2, { group:'ящики' })
-          add(`Дно ящика стола ${i+1}`, fW, p.D-80, 1, { material:'ДВП 3.2 мм', thickness:3.2, group:'ящики' })
-        }
-      }
-      if(p.rear && !isLegs){
-        // задняя стенка не нужна
+        add(`Фасад ящика стола ${i+1}`, fW, fH, 1, { edge:'по периметру', edgeX: 2*EA, edgeY: 2*EA, group:'фасады' })
+        add(`Боковина ящика стола ${i+1}`, p.D-80, 100, 2, { group:'ящики' })
+        add(`Перед/зад ящика стола ${i+1}`, fW-26, 100, 2, { group:'ящики' })
+        add(`Дно ящика стола ${i+1}`, fW, p.D-80, 1, { material:'ДВП 3.2 мм', thickness:3.2, group:'ящики' })
       }
       break
     }
     case 'polka': {
-      // Настенная полка: одна доска + возможно боковины/крепёж
-      // Варианты: простая полка, полка с боковинами (как маленький стеллаж)
+      // Настенная полка: простая доска или короб с боковинами
       if(p.polkaType === 'simple'){
-        add('Полка', p.W, p.D, 1, { edge:'по периметру', group:'корпус', note:'крепёж: полкодержатель 2шт / скрытый менсолодержатель' })
-        // Для длинных полок - ребро жесткости
+        add('Полка', p.W, p.D, 1, { edge:'по периметру', edgeX: 2*EA, edgeY: 2*EA, group:'корпус', note:'крепёж: полкодержатель 2шт / скрытый менсолодержатель' })
+        // Для длинных полок — ребро жёсткости
         if(p.W>800){
           add('Ребро жесткости', p.W-40, 80, 1, { edge:'-', group:'корпус', note:'под полкой сзади' })
         }
       }else{
-        // полка с боковинами (навесной шкаф без дверей)
-        add('Боковина левая', p.D, p.H, 1, { edge:'перед', group:'корпус' })
-        add('Боковина правая', p.D, p.H, 1, { edge:'перед', group:'корпус' })
-        add('Верх', innerW, p.D, 1, { edge:'перед', group:'корпус' })
-        add('Низ', innerW, p.D, 1, { edge:'перед', group:'корпус' })
-        if(p.shelves>0){
-          for(let i=0;i<p.shelves;i++) add(`Полка ${i+1}`, innerW-2, p.D-20, 1, { edge:'перед', group:'наполнение' })
+        // полка-короб (навесной шкаф без дверей)
+        add('Боковина левая', p.D, p.H, 1, { edge:'перед', edgeX: EA, group:'корпус' })
+        add('Боковина правая', p.D, p.H, 1, { edge:'перед', edgeX: EA, group:'корпус' })
+        add('Верх', innerW, p.D, 1, { edge:'перед', edgeY: EA, group:'корпус' })
+        add('Низ', innerW, p.D, 1, { edge:'перед', edgeY: EA, group:'корпус' })
+        const shelfW = p.shelfMount === 'overlay' ? p.W - 2 : innerW - 2
+        for(let i=0;i<p.shelves;i++){
+          add(`Полка ${i+1}`, shelfW, p.D-20, 1, { edge:'перед', edgeY: EA, group:'наполнение' })
         }
-        if(p.rear) add('Задняя стенка ДВП', p.W-4, p.H-4, 1, { material:'ДВП 3.2 мм', thickness:3.2, group:'корпус' })
+        if(p.rear) add('Задняя стенка ДВП', p.W-4, p.H-4, 1, { material:'ДВП 3.2 мм', thickness:3.2, edge:'-', group:'корпус' })
       }
       break
     }
   }
 
   // Общие расчёты
-  const totalArea = parts.reduce((s,p)=> s + (p.w*p.h*p.count)/1e6, 0)
-  const totalAreaCut = parts.reduce((s,p)=> s + (p.wCut*p.hCut*p.count)/1e6, 0)
-  // Кромка: считаем погонные метры
+  const totalArea = parts.reduce((s,pt)=> s + (pt.w*pt.h*pt.count)/1e6, 0)
+  const totalAreaCut = parts.reduce((s,pt)=> s + (pt.wCut*pt.hCut*pt.count)/1e6, 0)
+  // Кромка: погонные метры
   let edgeM = 0
   parts.forEach(pt=>{
     if(pt.edge && pt.edge!=='-'){
@@ -349,42 +317,32 @@ export function calculate(params){
 }
 
 function normalize(params){
-  const t = Number(params.t) || 16
+  const t = clamp(num(params.t, 16), 3, 40)
   const materialKey = params.materialKey || 'ldsp16'
   const mat = getMaterial(materialKey, t)
   return {
     type: params.type || 'shkaf',
-    H: clamp(Number(params.H)||2000, 200,3000),
-    W: clamp(Number(params.W)||800, 150,3000),
-    D: clamp(Number(params.D)||520, 150,900),
+    H: clamp(num(params.H, 2000), 200, 3000),
+    W: clamp(num(params.W, 800), 150, 3000),
+    D: clamp(num(params.D, 520), 150, 900),
     t,
     materialKey,
     materialLabel: mat.label,
-    sheetW: Number(params.sheetW)|| mat.sheet[0],
-    sheetH: Number(params.sheetH)|| mat.sheet[1],
+    sheetW: num(params.sheetW, mat.sheet[0]),
+    sheetH: num(params.sheetH, mat.sheet[1]),
     rear: !!params.rear,
     base: !!params.base,
     construction: params.construction || 'inset',
     shelfMount: params.shelfMount || 'inner',
-    shelves: clamp(Number(params.shelves)||0,0,20),
-    doors: clamp(Number(params.doors)||0,0,6),
-    drawers: clamp(Number(params.drawers)||0,0,8),
-    partitions: clamp(Number(params.partitions)||0,0,4),
-    gapFacade: Number(params.gapFacade)||3,
-    shelfInset: Number(params.shelfInset)||20,
-    edge: Number(params.edge)||1,
+    shelves: clamp(params.shelves, 0, 20),
+    doors: clamp(params.doors, 0, 6),
+    drawers: clamp(params.drawers, 0, 8),
+    partitions: clamp(params.partitions, 0, 4),
+    gapFacade: clamp(num(params.gapFacade, 3), 0, 10),
+    shelfInset: clamp(num(params.shelfInset, 20), 0, 50),
+    edge: clamp(num(params.edge, 1), 0, 5), // 0 = без кромки, иначе припуск в мм
     tableSupport: params.tableSupport || 'panels',
     polkaType: params.polkaType || 'simple',
     priceM2: mat.priceM2
   }
-}
-function clamp(v,min,max){ return Math.max(min, Math.min(max,v)) }
-
-// Экспорт для тестов
-export function estimateMaterial(parts, sheetW, sheetH){
-  // грубая оценка листов
-  const sheetArea = sheetW*sheetH/1e6
-  let total = 0
-  parts.forEach(p=>{ if(p.thickness>=8) total+= p.wCut*p.hCut*p.count/1e6 })
-  return { sheets: Math.ceil(total / sheetArea * 1.08), totalArea: total, sheetArea }
 }

@@ -2,7 +2,7 @@
 <html lang="ru">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#1e3a2f" />
     <title>Construction — Конструктор раскроя</title>
     <link rel="manifest" href="manifest.json" />
@@ -108,7 +108,7 @@
                     <option value="mdf18">МДФ 18 мм</option>
                     <option value="fanera12">Фанера 12 мм</option>
                     <option value="fanera15">Фанера 15 мм</option>
-                    <option value="fanera18" >Фанера 18 мм</option>
+                    <option value="fanera18">Фанера 18 мм</option>
                     <option value="fanera21">Фанера 21 мм</option>
                     <option value="osp12">ОСП/OSB 12 мм</option>
                     <option value="osp15">ОСП 15 мм</option>
@@ -174,7 +174,7 @@
                   <span>Полок (внутренних)</span>
                   <div class="stepper-ctrl">
                     <button data-action="dec" data-target="shelves">−</button>
-                    <input type="number" id="inpShelves" value="3" min="0" max="12" readonly>
+                    <input type="number" id="inpShelves" value="3" min="0" max="12">
                     <button data-action="inc" data-target="shelves">+</button>
                   </div>
                 </label>
@@ -182,7 +182,7 @@
                   <span>Дверей</span>
                   <div class="stepper-ctrl">
                     <button data-action="dec" data-target="doors">−</button>
-                    <input type="number" id="inpDoors" value="2" min="0" max="4" readonly>
+                    <input type="number" id="inpDoors" value="2" min="0" max="4">
                     <button data-action="inc" data-target="doors">+</button>
                   </div>
                 </label>
@@ -190,7 +190,7 @@
                   <span>Ящиков / шуфлядок</span>
                   <div class="stepper-ctrl">
                     <button data-action="dec" data-target="drawers">−</button>
-                    <input type="number" id="inpDrawers" value="0" min="0" max="6" readonly>
+                    <input type="number" id="inpDrawers" value="0" min="0" max="6">
                     <button data-action="inc" data-target="drawers">+</button>
                   </div>
                 </label>
@@ -198,7 +198,7 @@
                   <span>Перегородок верт.</span>
                   <div class="stepper-ctrl">
                     <button data-action="dec" data-target="partitions">−</button>
-                    <input type="number" id="inpPartitions" value="0" min="0" max="3" readonly>
+                    <input type="number" id="inpPartitions" value="0" min="0" max="3">
                     <button data-action="inc" data-target="partitions">+</button>
                   </div>
                 </label>
@@ -236,7 +236,7 @@
             <button class="tab" data-tab="projections">Чертежи <span class="tab-badge">4 вида</span></button>
             <button class="tab" data-tab="parts">Детали <span class="tab-badge" id="tabPartsCount">—</span></button>
             <button class="tab" data-tab="cutting">Раскрой <span class="tab-badge" id="tabSheetsCount">—</span></button>
-            <button class="tab" data-tab="estimate">Смекта</button>
+            <button class="tab" data-tab="estimate">Смета</button>
           </div>
 
           <div class="main-content">
@@ -313,6 +313,7 @@
         <button class="mnav-btn" data-tab="projections">📐 Чертёж</button>
         <button class="mnav-btn" data-tab="parts">📋 Детали</button>
         <button class="mnav-btn" data-tab="cutting">✂ Раскрой</button>
+        <button class="mnav-btn" data-tab="estimate">💰 Смета</button>
       </nav>
     </div>
 

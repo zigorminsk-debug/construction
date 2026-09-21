@@ -1,5 +1,5 @@
 import './style.css'
-import { calculate, getMaterial, MATERIALS } from './calculator.js'
+import { calculate, getMaterial } from './calculator.js'
 import { packParts, getPackStats } from './packing.js'
 import { drawAssembly, drawProjections, drawPartSketch, drawCuttingSheet } from './draw.js'
 
@@ -80,7 +80,8 @@ function bindUI(){
   $('#inpT').addEventListener('input', e=>{ state.t=Number(e.target.value); saveState(); recalc() })
   $('#selMaterial').addEventListener('change', e=>{
     state.materialKey=e.target.value
-    const m=getMaterial(state.materialKey, state.t)
+    // толщина и лист — из справочника выбранного материала
+    const m=getMaterial(state.materialKey)
     state.t=m.t
     $('#inpT').value=m.t
     state.sheetW=m.sheet[0]
@@ -130,6 +131,19 @@ function bindUI(){
     })
   })
 
+  // прямой ввод в поля степперов (с клавиатуры)
+  Object.entries({inpShelves:'shelves', inpDoors:'doors', inpDrawers:'drawers', inpPartitions:'partitions'}).forEach(([id,key])=>{
+    $('#'+id).addEventListener('change', e=>{
+      const inp=e.target
+      let v=Math.round(Number(inp.value))
+      if(!Number.isFinite(v)) v=state[key]
+      v=Math.max(Number(inp.min)||0, Math.min(Number(inp.max)||12, v))
+      inp.value=v
+      state[key]=v
+      saveState(); recalc()
+    })
+  })
+
   // extra dynamic options (tableSupport, polkaType)
   document.addEventListener('change', e=>{
     if(e.target.id==='selTableSupport'){ state.tableSupport=e.target.value; saveState(); recalc() }
@@ -139,6 +153,7 @@ function bindUI(){
   $('#btnCalc').addEventListener('click', recalc)
   $('#btnRotate').addEventListener('click', ()=>{
     state.rotate = (state.rotate+1)%4
+    saveState()
     renderAssembly()
   })
   $('#btnExplode').addEventListener('click', ()=>{
@@ -158,7 +173,7 @@ function bindUI(){
   $('#btnCopyList').addEventListener('click', copyList)
   $('#btnPrint').addEventListener('click', ()=>window.print())
   $('#btnSave').addEventListener('click', ()=>{
-    localStorage.setItem('construction_project', JSON.stringify({state, result:lastResult}))
+    saveState()
     toast('Проект сохранён в браузере')
   })
 
@@ -280,15 +295,14 @@ function renderParts(){
   let idx=1
   lastResult.parts.forEach(p=>{
     const tr=document.createElement('tr')
-    const area=(p.w*p.h/1e6).toFixed(3)
     const totalArea=(p.w*p.h*p.count/1e6).toFixed(3)
     tr.innerHTML=`<td>${idx++}</td>
-      <td><b>${p.name}</b><div style="font-size:11px;color:#64748b">${p.note||''}</div></td>
+      <td><b>${p.name}</b><div style="font-size:.6875rem;color:#64748b">${p.note||''}</div></td>
       <td>${p.material}</td>
       <td class="mono">${p.w} × ${p.h} <span style="color:#64748b">мм</span></td>
       <td class="mono">${p.thickness}</td>
       <td><span class="badge-count">${p.count}</span></td>
-      <td style="font-size:11px">${p.edge||'-'}</td>
+      <td style="font-size:.6875rem">${p.edge||'-'}</td>
       <td class="mono">${totalArea} м²</td>`
     tbody.appendChild(tr)
   })
@@ -303,7 +317,7 @@ function renderParts(){
   lastResult.parts.forEach(p=>{
     const card=document.createElement('div')
     card.className='part-sketch'
-    card.innerHTML=`<div class="part-sketch-header"><span class="part-sketch-title">${p.name} <span style="color:#64748b;font-weight:600">×${p.count}</span></span><span class="part-sketch-dims">${p.w}×${p.h}</span></div><div class="part-sketch-body"></div><div style="padding:6px 10px;background:#fffbeb;border-top:1px solid #e7e5e4;font-size:11px;display:flex;justify-content:space-between"><span>${p.material} ${p.thickness}мм</span><span style="font-weight:700">${p.edge||'без кромки'}</span></div>`
+    card.innerHTML=`<div class="part-sketch-header"><span class="part-sketch-title">${p.name} <span style="color:#64748b;font-weight:600">×${p.count}</span></span><span class="part-sketch-dims">${p.w}×${p.h}</span></div><div class="part-sketch-body"></div><div style="padding:6px 10px;background:#fffbeb;border-top:1px solid #e7e5e4;font-size:.6875rem;display:flex;justify-content:space-between;gap:6px;flex-wrap:wrap"><span>${p.material} ${p.thickness}мм</span><span style="font-weight:700">${p.edge||'без кромки'}</span></div>`
     const body=card.querySelector('.part-sketch-body')
     drawPartSketch(body, p)
     sketches.appendChild(card)
@@ -333,14 +347,14 @@ function renderCutting(){
   const renderSheetGroup = (sheets, title, sheetW, sheetH)=>{
     if(!sheets.length) return
     const groupTitle=document.createElement('div')
-    groupTitle.style.cssText='font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#1e3a2f;margin:8px 0 4px;opacity:.7'
+    groupTitle.style.cssText='font-weight:800;font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:#1e3a2f;margin:8px 0 4px;opacity:.7'
     groupTitle.textContent=title
     container.appendChild(groupTitle)
     sheets.forEach(sh=>{
       const card=document.createElement('div')
       card.className='sheet-card'
       const waste=(sh.area - sh.usedArea)/1e6
-      card.innerHTML=`<div class="sheet-header"><span class="sheet-title">Лист #${sh.index} — ${sh.label}</span><span class="sheet-meta"><span>Занято <b>${sh.efficiency.toFixed(1)}%</b></span><span>Деталей <b>${sh.items.length}</b></span><span>Обрезь <b>${waste.toFixed(2)} м²</b></span></span></div><div class="sheet-body"></div><div class="sheet-legend"><span><i style="width:14px;height:14px;background:#f2c14e;border:1px solid #1e3a2f;display:inline-block;border-radius:3px"></i> Основной материал</span><span><i style="width:14px;height:1px;background:#ef4444;display:inline-block;border-top:1px dashed #ef4444"></i> Линия реза (пропи 3мм)</span><span>↻ поворот 90° — штриховка</span></div>`
+      card.innerHTML=`<div class="sheet-header"><span class="sheet-title">Лист #${sh.index} — ${sh.label}</span><span class="sheet-meta"><span>Занято <b>${sh.efficiency.toFixed(1)}%</b></span><span>Деталей <b>${sh.items.length}</b></span><span>Обрезь <b>${waste.toFixed(2)} м²</b></span></span></div><div class="sheet-body"></div><div class="sheet-legend"><span><i style="width:14px;height:14px;background:#f2c14e;border:1px solid #1e3a2f;display:inline-block;border-radius:3px"></i> Основной материал</span><span><i style="width:14px;height:1px;background:#ef4444;display:inline-block;border-top:1px dashed #ef4444"></i> Линия реза (пропил 3мм)</span><span>↻ поворот 90° — штриховка</span></div>`
       const body=card.querySelector('.sheet-body')
       drawCuttingSheet(body, sh, sheetW, sheetH)
       container.appendChild(card)
@@ -363,26 +377,27 @@ function renderEstimate(){
   const sheetArea = state.sheetW*state.sheetH/1e6
   const priceSheet = sheetArea * m.priceM2
   const sheets = lastPack.totalSheets
-  const matCost = sheets * priceSheet
+  const sheetsMain = lastPack.sheetsMain.length
+  // листы ДВП считаются отдельно (фикс. цена задней стенки), по цене основного материала — только он
+  const matCost = sheetsMain * priceSheet
   const edgeCost = lastResult.edgeM * 1.2 // $ per meter
   const fittings = estimateFittings()
-  const work = 25 // base
 
   el.innerHTML=`
     <div class="est-card">
       <h3>📦 Материалы</h3>
-      <div class="est-row"><span>${m.label} • ${sheets} лист. × ${priceSheet.toFixed(1)}$</span><b>${matCost.toFixed(1)} $</b></div>
+      <div class="est-row"><span>${m.label} • ${sheetsMain} лист. × ${priceSheet.toFixed(1)}$</span><b>${matCost.toFixed(1)} $</b></div>
       <div class="est-row"><span>Кромка ПВХ ${lastResult.edgeM.toFixed(1)} м × 1.2$</span><b>${edgeCost.toFixed(1)} $</b></div>
       <div class="est-row"><span>ДВП задняя стенка ${state.rear?'есть':'нет'}</span><b>${state.rear? '8.0 $':'0.0 $'}</b></div>
       <div class="est-row"><span>Плёнка / упаковка</span><b>3.5 $</b></div>
       <div class="est-total"><span>Итого материалы</span><strong>${(matCost+edgeCost + (state.rear?8:0)+3.5).toFixed(1)} $</strong></div>
-      <div style="margin-top:10px;font-size:11px;color:#64748b">Цена листа ${sheetArea.toFixed(2)}м² × ${m.priceM2}$/м² = ${priceSheet.toFixed(1)}$ • Без доставки и распила на стороне</div>
+      <div style="margin-top:10px;font-size:.6875rem;color:#64748b">Цена листа ${sheetArea.toFixed(2)}м² × ${m.priceM2}$/м² = ${priceSheet.toFixed(1)}$ • Без доставки и распила на стороне</div>
     </div>
     <div class="est-card">
       <h3>🔩 Фурнитура</h3>
       ${fittings.map(f=> `<div class="est-row"><span>${f.name} × ${f.qty}</span><b>${f.cost.toFixed(1)} $</b></div>`).join('')}
       <div class="est-total"><span>Итого фурнитура</span><strong>${fittings.reduce((s,f)=>s+f.cost,0).toFixed(1)} $</strong></div>
-      <div style="margin-top:10px;font-size:11px;color:#64748b">Петли 35мм, направляющие шариковые 450мм, ручки, конфирматы 7×50, шканты, полкодержатели</div>
+      <div style="margin-top:10px;font-size:.6875rem;color:#64748b">Петли 35мм, направляющие шариковые 450мм, ручки, конфирматы 7×50, шканты, полкодержатели</div>
     </div>
     <div class="est-card">
       <h3>📐 Раскрой и обработка</h3>
@@ -397,8 +412,8 @@ function renderEstimate(){
       <div class="est-row" style="color:#fff;border-color:rgba(255,255,255,.2)"><span>Материалы</span><b>${(matCost+edgeCost + (state.rear?8:0)+3.5).toFixed(1)} $</b></div>
       <div class="est-row" style="color:#fff;border-color:rgba(255,255,255,.2)"><span>Фурнитура</span><b>${fittings.reduce((s,f)=>s+f.cost,0).toFixed(1)} $</b></div>
       <div class="est-row" style="color:#fff;border-color:rgba(255,255,255,.2)"><span>Работа</span><b>${(sheets*6 + lastResult.edgeM*0.8 + 11).toFixed(1)} $</b></div>
-      <div style="background:#f2c14e;color:#1e3a2f;border-radius:12px;padding:14px;display:flex;justify-content:space-between;align-items:center;margin-top:10px"><span style="font-weight:800">ВСЕГО</span><strong style="font-size:22px">${(matCost+edgeCost+ (state.rear?8:0)+3.5 + fittings.reduce((s,f)=>s+f.cost,0) + sheets*6 + lastResult.edgeM*0.8 + 11).toFixed(1)} $</strong></div>
-      <div style="margin-top:10px;font-size:11px;opacity:.8">Расчёт ориентировочный • Цены на ${new Date().toLocaleDateString('ru-RU')} • Курс уточняйте у поставщика</div>
+      <div style="background:#f2c14e;color:#1e3a2f;border-radius:12px;padding:14px;display:flex;justify-content:space-between;gap:8px;align-items:center;margin-top:10px"><span style="font-weight:800">ВСЕГО</span><strong style="font-size:1.375rem">${(matCost+edgeCost+ (state.rear?8:0)+3.5 + fittings.reduce((s,f)=>s+f.cost,0) + sheets*6 + lastResult.edgeM*0.8 + 11).toFixed(1)} $</strong></div>
+      <div style="margin-top:10px;font-size:.6875rem;opacity:.8">Расчёт ориентировочный • Цены на ${new Date().toLocaleDateString('ru-RU')} • Курс уточняйте у поставщика</div>
       <button class="btn btn-primary" style="margin-top:12px;background:#f2c14e;color:#1e3a2f" onclick="window.print()">🖨️ Печать сметы и чертежей</button>
     </div>
   `
@@ -418,7 +433,7 @@ function estimateFittings(){
     const shelvesCount = state.shelves * (state.partitions+1)
     out.push({name:'Полкодержатель (4шт/полка)', qty: shelvesCount*4, cost: shelvesCount*4*0.25})
   }
-  out.push({name:'Конфирмат 7×50', qty: 20 + state.shelves*4 + state.doors*4, cost: (20 + state.shelves*4)*0.12})
+  out.push({name:'Конфирмат 7×50', qty: 20 + state.shelves*4 + state.doors*4, cost: (20 + state.shelves*4 + state.doors*4)*0.12})
   out.push({name:'Шкант 8×30 + клей', qty: 16, cost: 2.0})
   out.push({name:'Заглушка конфирмата', qty: 20, cost: 1.2})
   out.push({name:'Уголок / эксцентрик', qty: 8, cost: 3.2})
@@ -432,14 +447,14 @@ function renderSummaryMini(){
   const totalArea=lastResult.totalArea.toFixed(2)
   const eff = (lastResult.totalAreaCut / (state.sheetW*state.sheetH/1e6 * Math.max(1,lastPack.totalSheets)) *100).toFixed(0)
   el.innerHTML=`<div style="font-weight:800;color:#1e3a2f;margin-bottom:6px">📋 Спецификация</div>
-    <div style="font-size:11px;color:#475569">Изделие: <b>${typeLabel(state.type)}</b> • ${state.W}×${state.H}×${state.D} мм • ${getMaterial(state.materialKey, state.t).label}</div>
+    <div style="font-size:.6875rem;color:#475569">Изделие: <b>${typeLabel(state.type)}</b> • ${state.W}×${state.H}×${state.D} мм • ${getMaterial(state.materialKey, state.t).label}</div>
     <div class="mini-grid">
       <div class="mini-card"><strong>${cnt}</strong><span>деталей</span></div>
       <div class="mini-card"><strong>${lastPack.totalSheets}</strong><span>листов</span></div>
       <div class="mini-card"><strong>${totalArea} м²</strong><span>площадь</span></div>
       <div class="mini-card"><strong>${eff}%</strong><span>эконом</span></div>
     </div>
-    <div style="margin-top:8px;font-size:11px;display:flex;justify-content:space-between;color:#64748b"><span>Кромка ${lastResult.edgeM.toFixed(1)} м</span><span>${state.rear?'ДВП есть':'без ДВП'}</span><span>${state.base?'цоколь 80':'без цоколя'}</span></div>`
+    <div style="margin-top:8px;font-size:.6875rem;display:flex;justify-content:space-between;gap:6px;flex-wrap:wrap;color:#64748b"><span>Кромка ${lastResult.edgeM.toFixed(1)} м</span><span>${state.rear?'ДВП есть':'без ДВП'}</span><span>${state.base?'цоколь 80':'без цоколя'}</span></div>`
 }
 function typeLabel(t){
   return {shkaf:'Шкаф', tumba:'Тумба', stoyka:'Стойка', stol:'Стол', polka:'Полка'}[t]||t
@@ -454,12 +469,12 @@ function switchTab(name){
   $$('.tab').forEach(b=> b.classList.toggle('active', b.dataset.tab===name))
   $$('.tab-panel').forEach(p=> p.classList.toggle('active', p.id===`panel-${name}`))
   $$('.mnav-btn').forEach(b=> b.classList.toggle('active', b.dataset.tab===name))
-  // scroll into view on mobile
+  // на мобильном контент выше навигации — прокручиваем к нему, чтобы была видна смена вкладки
   if(window.innerWidth<980){
+    const main=document.querySelector('.main')
+    if(main && main.scrollIntoView) main.scrollIntoView({behavior:'smooth', block:'start'})
+  }else{
     document.querySelector('.main-content').scrollTop=0
-  }
-  if(name==='cutting'){
-    // trigger resize?
   }
 }
 
@@ -475,7 +490,9 @@ function exportCSV(){
   const a=document.createElement('a')
   a.href=url
   a.download=`raskroy_${state.type}_${state.W}x${state.H}_${new Date().toISOString().slice(0,10)}.csv`
+  document.body.appendChild(a)
   a.click()
+  a.remove()
   URL.revokeObjectURL(url)
   toast('CSV сохранён')
 }
@@ -487,7 +504,24 @@ function copyList(){
   lastResult.parts.forEach((p,i)=>{
     txt+=`${i+1}. ${p.name} — ${p.w}×${p.h}×${p.thickness} ×${p.count}  [${p.edge||'-'}]  ${p.material}\n`
   })
-  navigator.clipboard.writeText(txt).then(()=> toast('Список скопирован в буфер'))
+  const done=()=> toast('Список скопирован в буфер')
+  const fallback=()=>{
+    // file:// (Android WebView) и старые браузеры без Clipboard API
+    const ta=document.createElement('textarea')
+    ta.value=txt
+    ta.style.cssText='position:fixed;opacity:0;left:-9999px'
+    document.body.appendChild(ta)
+    ta.select()
+    let ok=false
+    try{ ok=document.execCommand('copy') }catch(e){ ok=false }
+    ta.remove()
+    ok ? done() : toast('Не удалось скопировать')
+  }
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(done).catch(fallback)
+  }else{
+    fallback()
+  }
 }
 
 function toast(msg){
@@ -508,7 +542,3 @@ function loadState(){
 }
 
 init()
-
-// expose for debugging
-window._state=state
-window._calc=calculate

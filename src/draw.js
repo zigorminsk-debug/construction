@@ -6,6 +6,8 @@
  * - Карта раскроя
  */
 
+import { facadeZones } from './calculator.js'
+
 export function drawAssembly(container, parts, params, mode='iso', exploded=false){
   container.innerHTML = ''
   const W = params.W, H = params.H, D = params.D
@@ -18,7 +20,7 @@ export function drawAssembly(container, parts, params, mode='iso', exploded=fals
   svg.setAttribute('viewBox', '0 0 640 480')
   svg.setAttribute('preserveAspectRatio', 'xMidYMid meet')
   svg.style.width='100%'
-  svg.style.maxHeight='460px'
+  svg.style.maxHeight='min(460px, 66vh)'
   svg.style.background = '#fafaf9'
   svg.style.borderRadius = '12px'
 
@@ -78,10 +80,8 @@ function drawFront(svg, W,H,D,t, parts, params, exploded){
   svg.appendChild(g('rect',{x:x+1,y:y+1,width:t*scale,height:h-2,fill:'#e7e5e4',opacity:0.9}))
   svg.appendChild(g('rect',{x:x+w - t*scale -1,y:y+1,width:t*scale,height:h-2,fill:'#e7e5e4',opacity:0.9}))
 
-  // крыша/дно
-  const topY = y + (params.construction==='inset'? 0 : 0)
-  const innerW = W - 2*t
   // полки
+  const innerW = W - 2*t
   const shelves = params.shelves
   if(shelves>0){
     const step = (h - 40) / (shelves+1)
@@ -94,11 +94,14 @@ function drawFront(svg, W,H,D,t, parts, params, exploded){
     }
   }
 
-  // двери
+  // фасады: ящики внизу (над цоколем), двери сверху — без перекрытия
+  const fz = facadeZones(params)
+  const gap = fz.GAP * scale
+
+  // двери (верхняя зона)
   if(params.doors>0){
-    const gap = 3*scale
-    const doorW = (w - gap*(params.doors+1))/params.doors
-    const doorH = h - gap*2 - (params.base? 80*scale:0)
+    const doorW = fz.doorW * scale
+    const doorH = fz.doorH * scale
     const doorY = y + gap
     for(let i=0;i<params.doors;i++){
       const dx = x + gap + i*(doorW+gap)
@@ -116,15 +119,12 @@ function drawFront(svg, W,H,D,t, parts, params, exploded){
     }
   }
 
-  // ящики
-  if(params.drawers>0 && params.doors===0){
-    const gap=3*scale
-    const drawH = (h - gap*(params.drawers+1) - (params.base?0:0))/params.drawers
-    // if doors exist, drawers would be separate; simplify: drawers occupy lower part
-    let startY = y + h - drawH*params.drawers - gap*params.drawers
-    if(params.doors>0) startY = y + h - drawH*params.drawers - gap*(params.drawers+1)
+  // ящики (нижняя зона над цоколем)
+  if(params.drawers>0){
+    const drawH = fz.drawerH * scale
+    const zoneTop = y + h - (fz.baseH + fz.drawerZoneH)*scale
     for(let i=0;i<params.drawers;i++){
-      const dy = startY + i*(drawH+gap)
+      const dy = zoneTop + gap + i*(drawH+gap)
       const dx = x+ gap
       const dw = w - 2*gap
       svg.appendChild(g('rect',{x:dx,y:dy,width:dw,height:drawH,rx:2,fill:'#f8fafc',stroke:'#1e3a2f','stroke-width':1.2}))
@@ -157,10 +157,6 @@ function drawFront(svg, W,H,D,t, parts, params, exploded){
   const t2=g('text',{x:x+w+28,y:cy,'text-anchor':'middle','font-size':11,'font-family':'JetBrains Mono, monospace','font-weight':700,fill:'#1e3a2f',transform:`rotate(90 ${x+w+28} ${cy})`})
   t2.textContent=`H ${H}`
   svg.appendChild(t2)
-
-  // глубина намёк
-  const dd = g('text',{x:x+w-6,y:y+14,'font-size':8,'font-weight':800,fill:'#fff',opacity:0.9})
-  // leave
 }
 
 function drawSide(svg, W,H,D,t, parts, params){
@@ -208,12 +204,20 @@ function drawIso(svg, W,H,D,t, parts, params, exploded){
   const cos30 = Math.cos(30*Math.PI/180) // 0.866
   const sin30 = Math.sin(30*Math.PI/180) // 0.5
 
+  // поворот изделия вокруг вертикальной оси (0–3 четверти)
+  const rot = ((Number(params.rotate)||0) % 4 + 4) % 4
+  const cxw = W/2, czd = D/2
+
   // 3D box corners: (x,y,z) -> (X,Y) iso: X = cx + (x - z)*cos30*scale , Y = cy + (x+z)*sin30*scale - y*scale
   // где x = ширина (W), z = глубина (D), y = высота (H) вверх
   function iso(x,y,z){
+    let xx=x, zz=z
+    if(rot===1){ xx = cxw + (z - czd); zz = czd - (x - cxw) }
+    else if(rot===2){ xx = cxw - (x - cxw); zz = czd - (z - czd) }
+    else if(rot===3){ xx = cxw - (z - czd); zz = czd + (x - cxw) }
     return {
-      X: cx + (x - z)*cos30*scale,
-      Y: cy + (x + z)*sin30*scale - y*scale
+      X: cx + (xx - zz)*cos30*scale,
+      Y: cy + (xx + zz)*sin30*scale - y*scale
     }
   }
 
@@ -266,15 +270,11 @@ function drawIso(svg, W,H,D,t, parts, params, exploded){
 
   // левая боковина
   face([c000,c00D,c0HD,c00H], '#ffffff','#1e3a2f',1.8)
-  // толщина кромки левой
   // правая боковина
   face([cW00,cW0D,cWHD,cW0H], '#e7e5e4','#1e3a2f',1.8)
-  // передняя?? Actually боковины уже есть
 
   // крыша
   face([c00H,cW0H,cWHD,c0HD], '#f2c14e','#a16207',1.4)
-  // фаска крыши
-  face([c00H,cW0H,cW00,c000], '#fef9e7','#a16207',1) // no, this is front face
 
   // front face (фасад)
   const front = [c000,cW00,cW0H,c00H]
@@ -298,12 +298,15 @@ function drawIso(svg, W,H,D,t, parts, params, exploded){
     }
   }
 
+  // фасады: ящики внизу (над цоколем), двери сверху — без перекрытия
+  const fz = facadeZones(params)
+
   // двери
   if(params.doors>0){
-    const gap = 3
-    const doorW = (W - gap*(params.doors+1))/params.doors
-    const doorH = H - gap*2 - (params.base?80:0)
-    const doorY0 = gap + (params.base?0:0)
+    const gap = fz.GAP
+    const doorW = fz.doorW
+    const doorH = fz.doorH
+    const doorY0 = fz.baseH + fz.drawerZoneH + gap
     for(let i=0;i<params.doors;i++){
       const x0 = gap + i*(doorW+gap)
       const x1 = x0 + doorW
@@ -340,10 +343,9 @@ function drawIso(svg, W,H,D,t, parts, params, exploded){
 
   // ящики
   if(params.drawers>0){
-    const fH = (H - (params.doors>0? H*0.5:0) - (params.drawers+1)*3)/params.drawers
-    const yStart = H - fH*params.drawers -3*params.drawers
+    const fH = fz.drawerH
     for(let i=0;i<params.drawers;i++){
-      const y0 = yStart + i*(fH+3)
+      const y0 = fz.baseH + fz.GAP + i*(fH+fz.GAP)
       const y1 = y0+fH
       const off=6
       const dA=iso(3,y0,-off), dB=iso(W-3,y0,-off), dC=iso(W-3,y1,-off), dD=iso(3,y1,-off)
@@ -362,7 +364,7 @@ function drawIso(svg, W,H,D,t, parts, params, exploded){
     const bh=80
     const bA=iso(0,bh,0), bB=iso(W,bh,0), bC=iso(W,0,0), bD=iso(0,0,0)
     face([bA,bB,bC,bD], '#44403c','#1c1917',1)
-    const b2A=iso(0,bh,D), b2B=iso(W,bh,D), b2C=iso(W,0,D), b2D=iso(0,0,D)
+    const b2A=iso(0,bh,D), b2B=iso(W,bh,D)
     face([bA,bB,b2B,b2A], '#57534e','#1c1917',1)
   }
 
@@ -411,7 +413,7 @@ export function drawProjections(container, parts, params){
 
 function drawProjectionSVG(el, params, view){
   if(!el) return
-  const W=params.W, H=params.H, D=params.D, t=params.t, gap=params.gapFacade
+  const W=params.W, H=params.H, D=params.D, t=params.t
   const svgNS='http://www.w3.org/2000/svg'
   const svg=document.createElementNS(svgNS,'svg')
   svg.setAttribute('viewBox','0 0 300 220')
@@ -438,18 +440,25 @@ function drawProjectionSVG(el, params, view){
       }
     }
     if(params.doors>0){
-      const dw=(w - gap*scale*(params.doors+1))/params.doors
+      const fz = facadeZones(params)
+      const gpx = fz.GAP * scale
+      const dw = fz.doorW * scale
+      const dh = fz.doorH * scale
+      const dyy = y + fz.GAP * scale
       for(let i=0;i<params.doors;i++){
-        const dx=x+ gap*scale + i*(dw+gap*scale)
-        svg.appendChild(g('rect',{x:dx,y:y+4,width:dw,height:h-8,rx:2,fill: i%2? '#1e3a2f':'#2a5a45',stroke:'#0f172a',opacity:0.95}))
-        svg.appendChild(g('rect',{x:dx+6,y:y+10,width:dw-12,height:h-20,rx:1,fill:'none',stroke:'#f2c14e','stroke-width':0.7}))
+        const dx=x+ gpx + i*(dw+gpx)
+        svg.appendChild(g('rect',{x:dx,y:dyy,width:dw,height:dh,rx:2,fill: i%2? '#1e3a2f':'#2a5a45',stroke:'#0f172a',opacity:0.95}))
+        svg.appendChild(g('rect',{x:dx+6,y:dyy+6,width:dw-12,height:dh-12,rx:1,fill:'none',stroke:'#f2c14e','stroke-width':0.7}))
       }
     }
     if(params.drawers>0){
-      const dh=(h-20)/Math.max(params.drawers,1)
+      const fz = facadeZones(params)
+      const gpx = fz.GAP * scale
+      const dH = fz.drawerH * scale
+      const zoneTop = y + h - (fz.baseH + fz.drawerZoneH)*scale
       for(let i=0;i<params.drawers;i++){
-        const dy=y+h - (i+1)*dh
-        svg.appendChild(g('rect',{x:x+4,y:dy,width:w-8,height:dh-4,rx:2,fill:'#fff',stroke:'#1e3a2f'}))
+        const dy = zoneTop + gpx + i*(dH+gpx)
+        svg.appendChild(g('rect',{x:x+4,y:dy,width:w-8,height:dH,rx:2,fill:'#fff',stroke:'#1e3a2f'}))
       }
     }
     // dims
@@ -465,12 +474,6 @@ function drawProjectionSVG(el, params, view){
     svg.appendChild(g('rect',{x:x+1,y:y+d - t*scale -1,width:w-2,height:t*scale,fill:'#e7e5e4',opacity:0.7}))
     svg.appendChild(g('rect',{x:x+1,y:y+1,width:t*scale,height:d-2,fill:'#f1f5f9'}))
     svg.appendChild(g('rect',{x:x+w - t*scale -1,y:y+1,width:t*scale,height:d-2,fill:'#f1f5f9'}))
-    // shelves dashed
-    if(params.shelves>0){
-      for(let i=0;i<params.shelves;i++){
-        // not visible from top maybe line
-      }
-    }
     const tx=g('text',{x:150,y:y+d+14,'text-anchor':'middle','font-size':8,'font-family':'JetBrains Mono, monospace',fill:'#64748b'})
     tx.textContent=`${W} × ${D}`
     svg.appendChild(tx)
@@ -500,8 +503,6 @@ function drawProjectionSVG(el, params, view){
     for(let i=0;i<w;i+=10){
       svg.appendChild(g('line',{x1:x+i,y1:y,x2:x+i - h*0.3,y2:y+h,stroke:'#cbd5e1','stroke-width':0.6,opacity:0.6}))
     }
-    svg.appendChild(g('text',{x:150,y:y+h/2,'text-anchor':'middle','font-size':9,'font-weight':800,fill:'#475569'}).appendChild(document.createTextNode(params.rear?'ДВП 3.2 • накладная':'Без задней • 2 царги')) && g('text',{x:150,y:y+h/2,'text-anchor':'middle','font-size':9,'font-weight':800,fill:'#475569'}))
-    // fix text
     const t=g('text',{x:150,y:y+h/2,'text-anchor':'middle','font-size':9,'font-weight':800,fill:'#475569'})
     t.textContent = params.rear? 'ДВП 3.2 • накладная' : 'Без задней • 2 царги'
     svg.appendChild(t)
@@ -517,7 +518,6 @@ export function drawPartSketch(container, part){
   const svgNS='http://www.w3.org/2000/svg'
   const svg=document.createElementNS(svgNS,'svg')
   // viewBox adapts to part ratio
-  const maxW = Math.max(part.w, part.h)
   const scale = Math.min(180 / part.w, 110 / part.h) * 0.9
   const w = part.w * scale
   const h = part.h * scale
@@ -601,7 +601,7 @@ export function drawCuttingSheet(container, sheet, sheetW, sheetH){
   let colorIdx=0
   const colorMap=new Map()
 
-  sheet.items.forEach((it, idx)=>{
+  sheet.items.forEach((it)=>{
     const color = colorMap.get(it.name) || colors[colorIdx % colors.length]
     if(!colorMap.has(it.name)){ colorMap.set(it.name,color); colorIdx++ }
     const x = pad + it.x*scale
